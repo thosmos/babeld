@@ -1,0 +1,1 @@
+My id 40:7b:eb:c0:ac:38:fc:13 seqno \d+\nNeighbour fe80::bc21:1cff:fe69:3a9c.+rxcost (\d+) txcost (\d+) .+\n1\.0\.0\.2.+\n.+ metric (\d+) \((\d+)\).+
