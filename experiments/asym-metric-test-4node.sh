@@ -1,5 +1,8 @@
 #!bash
-
+kill -9 $(cat babeld-n1.pid)
+kill -9 $(cat babeld-n2.pid)
+kill -9 $(cat babeld-n3.pid)
+kill -9 $(cat babeld-n4.pid)
 rm babeld-n*
 
 source ../network-lab/network-lab.sh << EOF
@@ -7,29 +10,29 @@ source ../network-lab/network-lab.sh << EOF
   "nodes": {
     "1": { "ip": "1.0.0.1" },
     "2": { "ip": "1.0.0.2" },
-    "3": { "ip": "1.0.0.3" },
+    "3": { "ip": "1.0.0.3", "startup": [ "babeld -I babeld-n3.pid -d 1 -L babeld-n3.log -w veth-3-1 veth-3-4 &" ] },
     "4": { "ip": "1.0.0.4" }
   },
   "edges": [
     {
       "nodes": ["1", "2"],
-      "->": "loss random 2%",
-      "<-": "loss random 2%"
+      "->": "loss random 20%",
+      "<-": "loss random 20%"
     },
     {
       "nodes": ["1", "3"],
-      "->": "loss random 2%",
-      "<-": "loss random 2%"
+      "->": "loss random 20%",
+      "<-": "loss random 20%"
     },
     {
       "nodes": ["2", "4"],
       "->": "loss random 20%",
-      "<-": "loss random 2%"
+      "<-": "loss random 20%"
     },
     {
       "nodes": ["3", "4"],
       "->": "loss random 2%",
-      "<-": "loss random 10%"
+      "<-": "loss random 40%"
     }
   ]
 }
