@@ -10,14 +10,14 @@ source ../network-lab/network-lab.sh << EOF
   "nodes": {
     "1": { "ip": "1.0.0.1" },
     "2": { "ip": "1.0.0.2" },
-    "3": { "ip": "1.0.0.3", "startup": [ "babeld -I babeld-n3.pid -d 1 -L babeld-n3.log -w veth-3-1 veth-3-4 &" ] },
+    "3": { "ip": "1.0.0.3" },
     "4": { "ip": "1.0.0.4" }
   },
   "edges": [
     {
       "nodes": ["1", "2"],
-      "->": "loss random 20%",
-      "<-": "loss random 20%"
+      "->": "loss random 2%",
+      "<-": "loss random 40%"
     },
     {
       "nodes": ["1", "3"],
@@ -26,13 +26,13 @@ source ../network-lab/network-lab.sh << EOF
     },
     {
       "nodes": ["2", "4"],
-      "->": "loss random 20%",
-      "<-": "loss random 20%"
+      "->": "loss random 2%",
+      "<-": "loss random 40%"
     },
     {
       "nodes": ["3", "4"],
-      "->": "loss random 2%",
-      "<-": "loss random 40%"
+      "->": "loss random 20%",
+      "<-": "loss random 20%"
     }
   ]
 }
