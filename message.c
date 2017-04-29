@@ -306,7 +306,11 @@ parse_packet(const unsigned char *from, struct interface *ifp,
         gettime(&now);
     }
 
-    if(!linklocal(from)) {
+    message = packet + 4 + i;
+    type = message[0];
+
+    if(!linklocal(from) &&
+        (type == MESSAGE_REMOTE_HELLO || type == MESSAGE_REMOTE_IHU)) {
         fprintf(stderr, "Received packet from non-local address %s.\n",
                 format_address(from));
         return;
@@ -341,8 +345,8 @@ parse_packet(const unsigned char *from, struct interface *ifp,
 
     i = 0;
     while(i < bodylen) {
-        message = packet + 4 + i;
-        type = message[0];
+        // message = packet + 4 + i;
+        // type = message[0];
         if(type == MESSAGE_PAD1) {
             debugf("Received pad1 from %s on %s.\n",
                    format_address(from), ifp->name);
@@ -358,10 +362,14 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             fprintf(stderr, "Received truncated message.\n");
             break;
         }
-
+        // TODO add remote_hello and remote_ihu types
         if(type == MESSAGE_PADN) {
             debugf("Received pad%d from %s on %s.\n",
                    len, format_address(from), ifp->name);
+        } else if(type == MESSAGE_REMOTE_HELLO) {
+            debugf("Received remote hello");
+        } else if(type == MESSAGE_REMOTE_IHU) {
+            debugf("Received remote ihu");
         } else if(type == MESSAGE_ACK_REQ) {
             unsigned short nonce, interval;
             if(len < 6) goto fail;
@@ -965,6 +973,7 @@ accumulate_bytes(struct interface *ifp,
 static int
 start_unicast_message(struct neighbour *neigh, int type, int len)
 {
+    // TODO: replicate this stuff with unicast_remote variable instead of unicast_neighbor
     if(unicast_neighbour) {
         if(neigh != unicast_neighbour ||
            unicast_buffered + len + 2 >=

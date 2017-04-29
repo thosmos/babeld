@@ -172,11 +172,13 @@ main(int argc, char **argv)
 
     while(1) {
         opt = getopt(argc, argv,
-                     "m:p:h:H:i:k:A:sruS:d:g:G:lwz:M:t:T:c:C:DL:I:V");
+                     "X:m:p:h:H:i:k:A:sruS:d:g:G:lwz:M:t:T:c:C:DL:I:V");
         if(opt < 0)
             break;
 
         switch(opt) {
+        case 'X':
+            send_remote_hello(optarg)
         case 'm':
             rc = parse_address(optarg, protocol_group, NULL);
             if(rc < 0)

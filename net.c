@@ -140,6 +140,7 @@ babel_send(int s,
            const void *buf1, int buflen1, const void *buf2, int buflen2,
            const struct sockaddr *sin, int slen)
 {
+    // TODO: this is how you send
     struct iovec iovec[2];
     struct msghdr msg;
     int rc, count = 0;
