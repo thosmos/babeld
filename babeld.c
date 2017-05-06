@@ -153,7 +153,7 @@ main(int argc, char **argv)
     void *vrc;
     unsigned int seed;
     struct interface *ifp;
-
+    struct peer *remote = NULL;
     gettime(&now);
 
     rc = read_random_bytes(&seed, sizeof(seed));
@@ -178,7 +178,10 @@ main(int argc, char **argv)
 
         switch(opt) {
         case 'X':
-            send_remote_hello(optarg)
+            remote = malloc(sizeof(struct peer));
+	    remote->ifp = ifp;
+	    send_unicast_multihop_hello(remote, remote->ifp->hello_interval);
+	    free(remote);
         case 'm':
             rc = parse_address(optarg, protocol_group, NULL);
             if(rc < 0)

@@ -101,6 +101,9 @@ send_unicast_multihop_request(struct neighbour *neigh,
                               unsigned char src_plen,
                               unsigned short seqno, const unsigned char *id,
                               unsigned short hop_count);
+void
+send_unicast_multihop_hello(struct peer *neigh,
+                            unsigned interval);
 void send_request_resend(struct neighbour *neigh,
                          const unsigned char *prefix, unsigned char plen,
                          const unsigned char *src_prefix,

@@ -50,8 +50,11 @@ struct timeval seqno_time = {0, 0};
 
 #define UNICAST_BUFSIZE 1024
 int unicast_buffered = 0;
+int unicast_remote_buffered = 0;
 unsigned char *unicast_buffer = NULL;
+unsigned char *unicast_remote_buffer = NULL;
 struct neighbour *unicast_neighbour = NULL;
+struct peer *unicast_peer = NULL;
 struct timeval unicast_flush_timeout = {0, 0};
 
 extern const unsigned char v4prefix[16];
@@ -973,7 +976,6 @@ accumulate_bytes(struct interface *ifp,
 static int
 start_unicast_message(struct neighbour *neigh, int type, int len)
 {
-    // TODO: replicate this stuff with unicast_remote variable instead of unicast_neighbor
     if(unicast_neighbour) {
         if(neigh != unicast_neighbour ||
            unicast_buffered + len + 2 >=
@@ -994,6 +996,40 @@ start_unicast_message(struct neighbour *neigh, int type, int len)
     return 1;
 }
 
+//Function to start a remote Hello or IHU
+static int
+start_unicast_remote_message(struct peer *neigh, int type, int len)
+{
+    if(unicast_peer) {
+        if(neigh != unicast_peer ||
+           unicast_remote_buffered + len + 2 >=
+           MIN(UNICAST_BUFSIZE, neigh->ifp->bufsize))
+            flush_unicast(0);
+    }
+    if(!unicast_remote_buffer)
+        unicast_remote_buffer = malloc(UNICAST_BUFSIZE);
+    if(!unicast_remote_buffer) {
+        perror("malloc(unicast_buffer)");
+        return -1;
+    }
+
+    unicast_peer = neigh;
+
+    unicast_remote_buffer[unicast_remote_buffered++] = type;
+    unicast_remote_buffer[unicast_remote_buffered++] = len;
+    return 1;
+}
+
+//Function to end a remote Hello or IHU
+static void
+end_unicast_remote_message(struct peer *neigh, int type, int bytes)
+{
+    assert(unicast_peer == neigh && unicast_remote_buffered >= bytes + 2 &&
+           unicast_remote_buffer[unicast_buffered - bytes - 2] == type &&
+           unicast_remote_buffer[unicast_buffered - bytes - 1] == bytes);
+    schedule_unicast_flush(jitter(neigh->ifp, 0));
+}
+
 static void
 end_unicast_message(struct neighbour *neigh, int type, int bytes)
 {
@@ -1010,10 +1046,23 @@ accumulate_unicast_byte(struct neighbour *neigh, unsigned char value)
 }
 
 static void
+accumulate_unicast_remote_byte(struct peer *neigh, unsigned char value)
+{
+    unicast_remote_buffer[unicast_remote_buffered++] = value;
+}
+
+static void
 accumulate_unicast_short(struct neighbour *neigh, unsigned short value)
 {
     DO_HTONS(unicast_buffer + unicast_buffered, value);
     unicast_buffered += 2;
+}
+
+static void
+accumulate_unicast_remote_short(struct peer *neigh, unsigned short value)
+{
+    DO_HTONS(unicast_remote_buffer + unicast_remote_buffered, value);
+    unicast_remote_buffered += 2;
 }
 
 static void
@@ -1029,6 +1078,14 @@ accumulate_unicast_bytes(struct neighbour *neigh,
 {
     memcpy(unicast_buffer + unicast_buffered, value, len);
     unicast_buffered += len;
+}
+
+static void
+accumulate_unicast_remote_bytes(struct peer *neigh,
+                         const unsigned char *value, unsigned len)
+{
+    memcpy(unicast_remote_buffer + unicast_remote_buffered, value, len);
+    unicast_remote_buffered += len;
 }
 
 void
@@ -2016,6 +2073,48 @@ send_unicast_multihop_request(struct neighbour *neigh,
 }
 
 void
+send_unicast_multihop_hello(struct peer *neigh,
+                            unsigned interval)
+{
+    int rc;
+    /* This avoids sending multiple hellos in a single packet, which breaks
+       link quality estimation. */
+    if(neigh->ifp->buffered_hello >= 0)
+        flushbuf(neigh->ifp);
+
+    neigh->ifp->hello_seqno = seqno_plus(neigh->ifp->hello_seqno, 1);
+    set_timeout(&neigh->ifp->hello_timeout, neigh->ifp->hello_interval);
+
+    if(!if_up(neigh->ifp))
+        return;
+
+    debugf("Sending multi-hop Hello to %s\n",
+           format_address(neigh->address));
+
+    rc = start_unicast_remote_message(neigh, MESSAGE_REMOTE_HELLO,
+				      (neigh->ifp->flags & IF_TIMESTAMPS) ? 12 : 6);
+    if(rc < 0) return;
+    accumulate_unicast_remote_short(neigh, 0);
+    accumulate_unicast_remote_short(neigh, neigh->ifp->hello_seqno);
+    accumulate_unicast_remote_short(neigh, interval > 0xFFFF ? 0xFFFF : interval);
+    if(neigh->ifp->flags & IF_TIMESTAMPS) {
+        /* Sub-TLV containing the local time of emission. We use a
+           Pad4 sub-TLV, which we'll fill just before sending. */
+        accumulate_unicast_remote_byte(neigh, SUBTLV_PADN);
+        accumulate_unicast_remote_byte(neigh, 4);
+        accumulate_int(neigh->ifp, 0);
+    }
+
+    //how exactly to buffered hellos work? look that up
+    neigh->ifp->buffered_hello = neigh->ifp->buffered - 2;
+
+
+
+    end_unicast_remote_message(neigh, MESSAGE_REMOTE_HELLO,
+			       (neigh->ifp->flags & IF_TIMESTAMPS) ? 12 : 6);
+}
+
+void
 send_request_resend(struct neighbour *neigh,
                     const unsigned char *prefix, unsigned char plen,
                     const unsigned char *src_prefix, unsigned char src_plen,
@@ -2104,3 +2203,4 @@ handle_request(struct neighbour *neigh, const unsigned char *prefix,
     record_resend(RESEND_REQUEST, prefix, plen, src_prefix, src_plen, seqno, id,
                   neigh->ifp, 0);
 }
+
