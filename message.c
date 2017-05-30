@@ -306,14 +306,11 @@ parse_packet(const unsigned char *from, struct interface *ifp,
         gettime(&now);
     }
 
-    message = packet + 4 + i;
-    type = message[0];
-
-    if(!linklocal(from) &&
-        (type == MESSAGE_REMOTE_HELLO || type == MESSAGE_REMOTE_IHU)) {
+    if(!linklocal(from))
+    {
         fprintf(stderr, "Received packet from non-local address %s.\n",
                 format_address(from));
-        return;
+        //return;
     }
 
     if(packet[0] != 42) {
@@ -345,8 +342,8 @@ parse_packet(const unsigned char *from, struct interface *ifp,
 
     i = 0;
     while(i < bodylen) {
-        // message = packet + 4 + i;
-        // type = message[0];
+        message = packet + 4 + i;
+        type = message[0];
         if(type == MESSAGE_PAD1) {
             debugf("Received pad1 from %s on %s.\n",
                    format_address(from), ifp->name);
@@ -368,6 +365,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                    len, format_address(from), ifp->name);
         } else if(type == MESSAGE_REMOTE_HELLO) {
             debugf("Received remote hello");
+            printf("Received remote hello! \n");
         } else if(type == MESSAGE_REMOTE_IHU) {
             debugf("Received remote ihu");
         } else if(type == MESSAGE_ACK_REQ) {
@@ -793,6 +791,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
     return;
 }
 
+
 /* Under normal circumstances, there are enough moderation mechanisms
    elsewhere in the protocol to make sure that this last-ditch check
    should never trigger.  But I'm superstitious. */
@@ -970,10 +969,11 @@ accumulate_bytes(struct interface *ifp,
     ifp->buffered += len;
 }
 
+
+
 static int
 start_unicast_message(struct neighbour *neigh, int type, int len)
 {
-    // TODO: replicate this stuff with unicast_remote variable instead of unicast_neighbor
     if(unicast_neighbour) {
         if(neigh != unicast_neighbour ||
            unicast_buffered + len + 2 >=
@@ -1043,6 +1043,7 @@ send_ack(struct neighbour *neigh, unsigned short nonce, unsigned short interval)
     /* Roughly yields a value no larger than 3/2, so this meets the deadline */
     schedule_unicast_flush(roughly(interval * 6));
 }
+
 
 void
 send_hello_noupdate(struct interface *ifp, unsigned interval)
@@ -1134,6 +1135,89 @@ flush_unicast(int dofree)
     unicast_neighbour = NULL;
     unicast_flush_timeout.tv_sec = 0;
     unicast_flush_timeout.tv_usec = 0;
+}
+
+void
+flush_unicast_remote(int dofree, unsigned char* address)
+{
+    struct sockaddr_in6 sin6;
+    int rc;
+
+    if(unicast_buffered == 0)
+        goto done;
+
+    if(!if_up(unicast_neighbour->ifp))
+        goto done;
+
+    /* Preserve ordering of messages */
+    flushbuf(unicast_neighbour->ifp);
+
+    if(check_bucket(unicast_neighbour->ifp)) {
+        memset(&sin6, 0, sizeof(sin6));
+        sin6.sin6_family = AF_INET6;
+        // TODO char* to char[16]
+        memcpy(&sin6.sin6_addr, address, 16);
+        sin6.sin6_port = htons(protocol_port);
+        sin6.sin6_scope_id = unicast_neighbour->ifp->ifindex;
+        DO_HTONS(packet_header + 2, unicast_buffered);
+        fill_rtt_message(unicast_neighbour->ifp);
+        rc = babel_send(protocol_socket,
+                        packet_header, sizeof(packet_header),
+                        unicast_buffer, unicast_buffered,
+                        (struct sockaddr*)&sin6, sizeof(sin6));
+        if(rc < 0)
+            perror("send(unicast)");
+    } else {
+        fprintf(stderr,
+                "Warning: bucket full, dropping unicast packet "
+                "to %s if %s.\n",
+                format_address(address),
+                unicast_neighbour->ifp->name);
+    }
+
+ done:
+    VALGRIND_MAKE_MEM_UNDEFINED(unicast_buffer, UNICAST_BUFSIZE);
+    unicast_buffered = 0;
+    if(dofree && unicast_buffer) {
+        free(unicast_buffer);
+        unicast_buffer = NULL;
+    }
+    unicast_neighbour = NULL;
+    unicast_flush_timeout.tv_sec = 0;
+    unicast_flush_timeout.tv_usec = 0;
+}
+
+void
+send_unicast_multihop_hello(struct neighbour* neigh, unsigned interval, unsigned char* address)
+{
+    /* This avoids sending multiple hellos in a single packet, which breaks
+       link quality estimation. */
+    if(neigh->ifp->buffered_hello >= 0)
+        flushbuf(neigh->ifp);
+
+    neigh->ifp->hello_seqno = seqno_plus(neigh->ifp->hello_seqno, 1);
+    set_timeout(&neigh->ifp->hello_timeout, neigh->ifp->hello_interval);
+
+    if(!if_up(neigh->ifp))
+        return;
+
+    printf("Sending multi-hop hello to %s\n",
+           format_address(address));
+    start_unicast_message(neigh, MESSAGE_REMOTE_HELLO, (neigh->ifp->flags & IF_TIMESTAMPS) ? 12 : 6);
+    neigh->ifp->buffered_hello = neigh->ifp->buffered - 2;
+
+    accumulate_unicast_short(neigh, 0);
+    accumulate_unicast_short(neigh, neigh->ifp->hello_seqno);
+    accumulate_unicast_short(neigh, interval > 0xFFFF ? 0xFFFF : interval);
+    if(neigh->ifp->flags & IF_TIMESTAMPS) {
+        /* Sub-TLV containing the local time of emission. We use a
+           Pad4 sub-TLV, which we'll fill just before sending. */
+        accumulate_unicast_byte(neigh, SUBTLV_PADN);
+        accumulate_unicast_byte(neigh, 4);
+        accumulate_unicast_int(neigh, 0);
+    }
+    end_unicast_message(neigh, MESSAGE_REMOTE_HELLO, (neigh->ifp->flags & IF_TIMESTAMPS) ? 12 : 6);
+    flush_unicast_remote(0, address);
 }
 
 static void

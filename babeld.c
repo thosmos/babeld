@@ -178,7 +178,6 @@ main(int argc, char **argv)
 
         switch(opt) {
         case 'X':
-            send_remote_hello(optarg)
         case 'm':
             rc = parse_address(optarg, protocol_group, NULL);
             if(rc < 0)
@@ -758,6 +757,27 @@ main(int argc, char **argv)
         if(now.tv_sec >= source_expiry_time) {
             expire_sources();
             source_expiry_time = now.tv_sec + roughly(300);
+        }
+
+        struct route_stream *routes;
+        routes = route_stream(ROUTE_INSTALLED);
+        if(routes) {
+            while(1) {
+                struct babel_route *route = route_stream_next(routes);
+                if(route == NULL)
+                    break;
+                // Don't send remote hellos to neighbour
+                printf("Neigh address %s route prefix %s\n",
+                               format_address(route->neigh->address),
+                               format_address(route->src->src_prefix));
+                if(memcmp(route->neigh->address, route->src->prefix, 16) == 0)
+                        continue;
+                send_unicast_multihop_hello(route->neigh, route->neigh->ifp->hello_interval, route->src->id);
+            }
+            route_stream_done(routes);
+        }
+        else {
+            fprintf(stderr, "Couldn't allocate route stream.\n");
         }
 
         FOR_ALL_INTERFACES(ifp) {

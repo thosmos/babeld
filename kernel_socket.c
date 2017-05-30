@@ -805,7 +805,7 @@ kernel_addresses(struct kernel_filter *filter)
 
         if(ifap->ifa_addr->sa_family == AF_INET6) {
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)ifap->ifa_addr;
-            memcpy(&addr.addr, &sin6->sin6_addr, 16);
+            emcpy(&addr.addr, &sin6->sin6_addr, 16);
             if(IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr))
                 /* This a perfect example of counter-productive optimisation :
                    KAME encodes interface index onto bytes 2 and 3, so we have

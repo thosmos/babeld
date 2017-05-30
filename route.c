@@ -78,7 +78,6 @@ route_compare(const unsigned char *prefix, unsigned char plen,
               struct babel_route *route)
 {
     int i;
-
     /* Put all source-specific routes in the front of the list. */
     if(src_plen == 0 && route->src->src_plen > 0) {
         return 1;
@@ -119,8 +118,8 @@ find_route_slot(const unsigned char *prefix, unsigned char plen,
                 const unsigned char *src_prefix, unsigned char src_plen,
                 int *new_return)
 {
+    printf("Running find route slot\n");
     int p, m, g, c;
-
     if(route_slots < 1) {
         if(new_return)
             *new_return = 0;
@@ -139,6 +138,8 @@ find_route_slot(const unsigned char *prefix, unsigned char plen,
         else
             p = m + 1;
     } while(p <= g);
+    printf("Finding route slot\n");
+    printf("%i",p);
 
     if(new_return)
         *new_return = p;
@@ -213,6 +214,8 @@ static struct babel_route *
 insert_route(struct babel_route *route)
 {
     int i, n;
+    printf("inserting route");
+    printf("%s", route->nexthop);
 
     assert(!route->installed);
 

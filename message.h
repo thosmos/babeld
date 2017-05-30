@@ -49,6 +49,9 @@ THE SOFTWARE.
 #define SUBTLV_DIVERSITY 2 /* Also known as babelz. */
 #define SUBTLV_TIMESTAMP 3 /* Used to compute RTT. */
 
+
+void send_unicast_multihop_hello(struct neighbour* neigh, unsigned interval, unsigned char* address);
+
 extern unsigned short myseqno;
 extern struct timeval seqno_time;
 
