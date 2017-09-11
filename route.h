@@ -25,6 +25,8 @@ THE SOFTWARE.
 #define DIVERSITY_CHANNEL_1 2
 #define DIVERSITY_CHANNEL 3
 
+#include <stdint.h>
+
 struct babel_route {
     struct source *src;
     unsigned short refmetric;
@@ -41,6 +43,8 @@ struct babel_route {
     short channels_len;
     unsigned char *channels;
     struct babel_route *next;
+    uint32_t price;
+    unsigned int full_path_rtt;
 };
 
 #define ROUTE_ALL 0
@@ -51,13 +55,12 @@ struct route_stream;
 extern struct babel_route **routes;
 extern int kernel_metric, allow_duplicates, reflect_kernel_metric;
 extern int diversity_kind, diversity_factor;
-extern int keep_unfeasible;
 
 static inline int
 route_metric(const struct babel_route *route)
 {
     int m = (int)route->refmetric + route->cost + route->add_metric;
-    return MIN(m, INFINITY);
+    return MIN(m, BABEL_INFINITY);
 }
 
 static inline int
@@ -68,7 +71,7 @@ route_metric_noninterfering(const struct babel_route *route)
         (diversity_factor * route->cost + 128) / 256 +
         route->add_metric;
     m = MAX(m, route->refmetric + 1);
-    return MIN(m, INFINITY);
+    return MIN(m, BABEL_INFINITY);
 }
 
 struct babel_route *find_route(const unsigned char *prefix, unsigned char plen,
@@ -111,9 +114,11 @@ struct babel_route *update_route(const unsigned char *id,
                            const unsigned char *src_prefix,
                            unsigned char src_plen,
                            unsigned short seqno, unsigned short refmetric,
-                           unsigned short interval, struct neighbour *neigh,
+                           unsigned short interval, uint32_t price,
+                           struct neighbour *neigh,
                            const unsigned char *nexthop,
-                           const unsigned char *channels, int channels_len);
+                           const unsigned char *channels, int channels_len,
+                           unsigned int full_path_rtt);
 void retract_neighbour_routes(struct neighbour *neigh);
 void send_unfeasible_request(struct neighbour *neigh, int force,
                              unsigned short seqno, unsigned short metric,
@@ -122,6 +127,7 @@ void consider_route(struct babel_route *route);
 void send_triggered_update(struct babel_route *route,
                            struct source *oldsrc, unsigned oldmetric);
 void route_changed(struct babel_route *route,
-                   struct source *oldsrc, unsigned short oldmetric);
+                   struct source *oldsrc, unsigned short oldmetric,
+                   uint32_t oldprice);
 void route_lost(struct source *src, unsigned oldmetric);
 void expire_routes(void);

@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#define INFINITY ((unsigned short)(~0))
+#define BABEL_INFINITY ((unsigned short)(~0))
 
 #ifndef RTPROT_BABEL
 #define RTPROT_BABEL 42
@@ -80,6 +80,8 @@ THE SOFTWARE.
 #endif
 #endif
 
+#include <stdint.h>
+
 extern struct timeval now;
 extern int debug;
 extern time_t reboot_time;
@@ -105,6 +107,9 @@ extern unsigned char protocol_group[16];
 extern int protocol_socket;
 extern int kernel_socket;
 extern int max_request_hopcount;
+
+extern uint32_t fee;
+extern uint32_t metric_factor;
 
 void schedule_neighbours_check(int msecs, int override);
 void schedule_interfaces_check(int msecs, int override);

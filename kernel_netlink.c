@@ -58,7 +58,7 @@ THE SOFTWARE.
 #include "configuration.h"
 
 #ifndef MAX_INTERFACES
-#define MAX_INTERFACES 20
+#define MAX_INTERFACES 10000
 #endif
 
 #define GET_PLEN(p, v4) (v4) ? (p) + 96 : (p)
@@ -656,6 +656,7 @@ get_old_if(const char *ifname)
 int
 kernel_setup_interface(int setup, const char *ifname, int ifindex)
 {
+
     char buf[100];
     int i, rc;
 
@@ -674,14 +675,18 @@ kernel_setup_interface(int setup, const char *ifname, int ifindex)
             fprintf(stderr,
                     "Warning: cannot save old configuration for %s.\n",
                     ifname);
-        rc = write_proc(buf, 0);
-        if(rc < 0)
-            return -1;
+        if(old_if[i].rp_filter) {
+            rc = write_proc(buf, 0);
+            if(rc < 0)
+                return -1;
+        }
     } else {
-        if(i >= 0 && old_if[i].rp_filter >= 0)
+        if(i >= 0 && old_if[i].rp_filter > 0)
             rc = write_proc(buf, old_if[i].rp_filter);
-        else
+        else if(i < 0)
             rc = -1;
+        else
+            rc = 1;
 
         if(rc < 0)
             fprintf(stderr,
@@ -1025,12 +1030,13 @@ kernel_route(int operation, int table,
         rtm->rtm_src_len = src_plen;
     rtm->rtm_table = table;
     rtm->rtm_scope = RT_SCOPE_UNIVERSE;
-    if(metric < KERNEL_INFINITY)
+    if(metric < KERNEL_INFINITY) {
         rtm->rtm_type = RTN_UNICAST;
-    else
+        rtm->rtm_flags |= RTNH_F_ONLINK;
+    } else
         rtm->rtm_type = RTN_UNREACHABLE;
+
     rtm->rtm_protocol = RTPROT_BABEL;
-    rtm->rtm_flags |= RTNH_F_ONLINK;
 
     rta = RTM_RTA(rtm);
 
@@ -1312,10 +1318,13 @@ parse_addr_rta(struct ifaddrmsg *addr, int len, struct in6_addr *res)
     struct rtattr *rta;
     len -= NLMSG_ALIGN(sizeof(*addr));
     rta = IFA_RTA(addr);
+    int has_local = 0; /* A _LOCAL TLV may be bound with a _ADDRESS' which
+        represents the peer's address.  In this case, ignore _ADDRESS. */
 
     while(RTA_OK(rta, len)) {
         switch(rta->rta_type) {
         case IFA_LOCAL:
+            has_local = 1;
         case IFA_ADDRESS:
             switch(addr->ifa_family) {
             case AF_INET:
@@ -1332,6 +1341,8 @@ parse_addr_rta(struct ifaddrmsg *addr, int len, struct in6_addr *res)
                 return -1;
                 break;
             }
+            if(has_local)
+                return 0;
             break;
         default:
             break;

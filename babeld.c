@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -99,6 +100,16 @@ static int accept_local_connections(void);
 static void init_signals(void);
 static void dump_tables(FILE *out);
 
+// The cost to forward through us
+uint32_t fee = 0;
+
+/**
+ * A multiplier to indicate how much the user values quality vs. price metrics;
+ * higher value means quality is valued more; Value is interpreted as 1000x of
+ * the target value, which makes the default below equal to 1.9
+ */
+uint32_t metric_factor = 1900;
+
 static int
 kernel_route_notify(struct kernel_route *route, void *closure)
 {
@@ -172,7 +183,7 @@ main(int argc, char **argv)
 
     while(1) {
         opt = getopt(argc, argv,
-                     "m:p:h:H:i:k:A:sruS:d:g:G:lwz:M:t:T:c:C:DL:I:V");
+                     "m:p:F:h:H:i:k:A:srS:d:g:G:lwz:M:q:t:T:c:C:DL:I:V");
         if(opt < 0)
             break;
 
@@ -225,9 +236,6 @@ main(int argc, char **argv)
         case 'r':
             random_id = 1;
             break;
-        case 'u':
-            keep_unfeasible = 1;
-            break;
         case 'S':
             state_file = optarg;
             break;
@@ -279,6 +287,36 @@ main(int argc, char **argv)
             if(l < 0 || l > 3600)
                 goto usage;
             change_smoothing_half_life(l);
+            break;
+        }
+        case 'F': {
+            char *endptr = optarg;
+            unsigned long a = strtoul(optarg, &endptr, 0);
+            errno = 0;
+
+            // Display help if strtoul() fails or the value won't fit
+            if(a > UINT32_MAX || endptr == optarg || errno) {
+                fprintf(stderr, "Couldn't parse the price: %s\n",
+                        optarg);
+                goto usage;
+            }
+
+            fee = a;
+            break;
+        }
+        case 'q': {
+            char *endptr = optarg;
+            unsigned long factor = strtoul(optarg, &endptr, 0);
+            errno = 0;
+
+            // Display help if strtoul() fails or the value won't fit
+            if(factor > UINT32_MAX || endptr == optarg || errno) {
+                fprintf(stderr, "Couldn't parse the metric factor: %s\n",
+                        optarg);
+                goto usage;
+            }
+
+            metric_factor = factor;
             break;
         }
         case 't':
@@ -585,7 +623,6 @@ main(int argc, char **argv)
         send_hello(ifp);
         send_wildcard_retraction(ifp);
         send_self_update(ifp);
-        send_request(ifp, NULL, 0, NULL, 0);
         flushupdates(ifp);
         flushbuf(ifp);
     }
@@ -870,6 +907,8 @@ main(int argc, char **argv)
             "               "
             "[-d level] [-D] [-L logfile] [-I pidfile]\n"
             "               "
+            "[-F fee] [-q multiplier]\n"
+            "               "
             "interface...\n",
             BABELD_VERSION);
     exit(1);
@@ -1074,13 +1113,18 @@ dump_route(FILE *out, struct babel_route *route)
         snprintf(channels + j, 100 - j, ")");
     }
 
-    fprintf(out, "%s%s%s metric %d (%d) refmetric %d id %s "
-            "seqno %d%s age %d via %s neigh %s%s%s%s\n",
+    fprintf(out, "%s%s%s metric %d (%d) price %u fee %d refmetric %d full-path-rtt %s "
+            "id %s seqno %d%s age %d via %s neigh %s%s%s%s\n",
             format_prefix(route->src->prefix, route->src->plen),
             route->src->src_plen > 0 ? " from " : "",
             route->src->src_plen > 0 ?
             format_prefix(route->src->src_prefix, route->src->src_plen) : "",
-            route_metric(route), route_smoothed_metric(route), route->refmetric,
+            route_metric(route),
+            route_smoothed_metric(route),
+            route->price - fee, // I *myself* get there for $X...
+            fee,                // ...and I *charge* others $Y
+            route->refmetric,
+            format_thousands(route->full_path_rtt),
             format_eui64(route->src->id),
             (int)route->seqno,
             channels,
@@ -1096,12 +1140,13 @@ dump_route(FILE *out, struct babel_route *route)
 static void
 dump_xroute(FILE *out, struct xroute *xroute)
 {
-    fprintf(out, "%s%s%s metric %d (exported)\n",
+    fprintf(out, "%s%s%s metric %d price %d (exported)\n",
             format_prefix(xroute->prefix, xroute->plen),
             xroute->src_plen > 0 ? " from " : "",
             xroute->src_plen > 0 ?
             format_prefix(xroute->src_prefix, xroute->src_plen) : "",
-            xroute->metric);
+            xroute->metric,
+            xroute->price);
 }
 
 static void
@@ -1116,11 +1161,12 @@ dump_tables(FILE *out)
     fprintf(out, "My id %s seqno %d\n", format_eui64(myid), myseqno);
 
     FOR_ALL_NEIGHBOURS(neigh) {
-        fprintf(out, "Neighbour %s dev %s reach %04x rxcost %d txcost %d "
-                "rtt %s rttcost %d chan %d%s.\n",
+        fprintf(out, "Neighbour %s dev %s reach %04x ureach %04x "
+                "rxcost %d txcost %d rtt %s rttcost %d chan %d%s.\n",
                 format_address(neigh->address),
                 neigh->ifp->name,
-                neigh->reach,
+                neigh->hello.reach,
+                neigh->uhello.reach,
                 neighbour_rxcost(neigh),
                 neigh->txcost,
                 format_thousands(neigh->rtt),

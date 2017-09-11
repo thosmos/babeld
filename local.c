@@ -153,14 +153,16 @@ local_notify_neighbour_1(struct local_socket *s,
 
     rc = snprintf(buf, 512,
                   "%s neighbour %lx address %s "
-                  "if %s reach %04x rxcost %d txcost %d%s cost %d\n",
+                  "if %s reach %04x ureach %04x "
+                  "rxcost %d txcost %d%s cost %d\n",
                   local_kind(kind),
                   /* Neighbours never move around in memory , so we can use the
                      address as a unique identifier. */
                   (unsigned long int)neigh,
                   format_address(neigh->address),
                   neigh->ifp->name,
-                  neigh->reach,
+                  neigh->hello.reach,
+                  neigh->uhello.reach,
                   neighbour_rxcost(neigh),
                   neighbour_txcost(neigh),
                   rttbuf,
@@ -237,14 +239,19 @@ local_notify_route_1(struct local_socket *s, struct babel_route *route, int kind
                                            route->src->src_plen);
 
     rc = snprintf(buf, 512,
-                  "%s route %lx prefix %s from %s installed %s "
-                  "id %s metric %d refmetric %d via %s if %s\n",
+                  "%s route %lx prefix %s from %s installed %s id %s metric %d "
+                  "price %u fee %u refmetric %d full-path-rtt %s "
+                  "via %s if %s\n",
                   local_kind(kind),
                   (unsigned long)route,
                   dst_prefix, src_prefix,
                   route->installed ? "yes" : "no",
                   format_eui64(route->src->id),
-                  route_metric(route), route->refmetric,
+                  route_metric(route),
+                  route->price - fee, // I *myself* get there for $X...
+                  fee,                // ...and I *charge* others $Y
+                  route->refmetric,
+                  format_thousands(route->full_path_rtt),
                   format_address(route->neigh->address),
                   route->neigh->ifp->name);
 
@@ -272,12 +279,55 @@ local_notify_route(struct babel_route *route, int kind)
 }
 
 static void
+local_notify_fee_1(struct local_socket *s)
+{
+    char buf[64];
+    int rc;
+    rc  = snprintf(buf, 64, "local fee %u\n", fee);
+
+    if(rc < 0 || rc >= 64)
+        goto fail;
+
+    rc = write_timeout(s->fd, buf, rc);
+    if(rc < 0)
+        goto fail;
+    return;
+
+ fail:
+    shutdown(s->fd, 1);
+    return;
+}
+
+static void
+local_notify_metric_factor_1(struct local_socket *s)
+{
+    char buf[64];
+    int rc;
+    rc  = snprintf(buf, 64, "metric factor %u\n", metric_factor);
+
+    if(rc < 0 || rc >= 64)
+        goto fail;
+
+    rc = write_timeout(s->fd, buf, rc);
+    if(rc < 0)
+        goto fail;
+    return;
+
+ fail:
+    shutdown(s->fd, 1);
+    return;
+}
+
+static void
 local_notify_all_1(struct local_socket *s)
 {
     struct interface *ifp;
     struct neighbour *neigh;
     struct xroute_stream *xroutes;
     struct route_stream *routes;
+
+    local_notify_fee_1(s);
+    local_notify_metric_factor_1(s);
 
     FOR_ALL_INTERFACES(ifp) {
         local_notify_interface_1(s, ifp, LOCAL_ADD);
@@ -396,7 +446,7 @@ local_header(struct local_socket *s)
     if(rc < 0)
         strncpy(host, "alamakota", 64);
 
-    rc = snprintf(buf, 512, "BABEL 1.0\nversion %s\nhost %s\nmy-id %s\nok\n",
+    rc = snprintf(buf, 512, "ALTHEA 0.1\nversion %s\nhost %s\nmy-id %s\nok\n",
                   BABELD_VERSION, host, format_eui64(myid));
     if(rc < 0 || rc >= 512)
         goto fail;

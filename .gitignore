@@ -11,3 +11,8 @@ tags
 *.orig
 *~
 \#*#
+
+# Test artifacts
+tests/babeld_*
+*.pid
+*.log

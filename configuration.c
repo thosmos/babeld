@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <errno.h>
 
 #ifdef __linux
 /* Defining it rather than including <linux/rtnetlink.h> because this
@@ -37,6 +38,7 @@ THE SOFTWARE.
 #include "interface.h"
 #include "route.h"
 #include "kernel.h"
+#include "xroute.h"
 #include "configuration.h"
 #include "rule.h"
 
@@ -166,6 +168,25 @@ getint(int c, int *int_r, gnc_t gnc, void *closure)
     }
     free(t);
     *int_r = i;
+    return c;
+}
+
+static unsigned int
+getuint32_t(int c, uint32_t *retval, gnc_t gnc, void *closure)
+{
+    char *t = NULL, *end = NULL;
+    unsigned long i;
+    c = getword(c, &t, gnc, closure);
+    if(c < -1)
+        return c;
+    errno = 0;
+    i = strtoul(t, &end, 0);
+    if(!t || t[0] == '-' || *end != '\0' || errno || i > (unsigned long)UINT32_MAX) {
+        free(t);
+        return -2;
+    }
+    free(t);
+    *retval = i;
     return c;
 }
 
@@ -320,6 +341,17 @@ get_interface_type(int c, int *type_r, gnc_t gnc, void *closure)
     return c;
 }
 
+static void
+free_filter(struct filter *f)
+{
+    free(f->ifname);
+    free(f->id);
+    free(f->prefix);
+    free(f->src_prefix);
+    free(f->neigh);
+    free(f->action.src_prefix);
+    free(f);
+}
 
 static int
 parse_filter(int c, gnc_t gnc, void *closure, struct filter **filter_return)
@@ -341,7 +373,7 @@ parse_filter(int c, gnc_t gnc, void *closure, struct filter **filter_return)
         }
         c = getword(c, &token, gnc, closure);
         if(c < -1) {
-            free(filter);
+            free_filter(filter);
             return -2;
         }
 
@@ -433,12 +465,12 @@ parse_filter(int c, gnc_t gnc, void *closure, struct filter **filter_return)
         } else if(strcmp(token, "allow") == 0) {
             filter->action.add_metric = 0;
         } else if(strcmp(token, "deny") == 0) {
-            filter->action.add_metric = INFINITY;
+            filter->action.add_metric = BABEL_INFINITY;
         } else if(strcmp(token, "metric") == 0) {
             int metric;
             c = getint(c, &metric, gnc, closure);
             if(c < -1) goto error;
-            if(metric <= 0 || metric > INFINITY)
+            if(metric <= 0 || metric > BABEL_INFINITY)
                 goto error;
             filter->action.add_metric = metric;
         } else if(strcmp(token, "src-prefix") == 0) {
@@ -451,13 +483,11 @@ parse_filter(int c, gnc_t gnc, void *closure, struct filter **filter_return)
                 filter->af = af;
             else if(filter->af != af)
                 goto error;
-            if(af == AF_INET && filter->action.src_plen == 96)
-                memset(&filter->action.src_prefix, 0, 16);
         } else if(strcmp(token, "table") == 0) {
             int table;
             c = getint(c, &table, gnc, closure);
             if(c < -1) goto error;
-            if(table <= 0 || table > INFINITY)
+            if(table <= 0 || table > BABEL_INFINITY)
                 goto error;
             filter->action.table = table;
         } else {
@@ -470,15 +500,21 @@ parse_filter(int c, gnc_t gnc, void *closure, struct filter **filter_return)
            filter->src_plen_le < 128 || filter->src_plen_ge > 0)
             filter->af = AF_INET6;
     } else if(filter->af == AF_INET) {
-        filter->plen_le += 96;
-        filter->plen_ge += 96;
+        if(filter->plen_le < 128)
+            filter->plen_le += 96;
+        if(filter->plen_ge > 0)
+            filter->plen_ge += 96;
+        if(filter->src_plen_le < 128)
+            filter->src_plen_le += 96;
+        if(filter->src_plen_ge > 0)
+            filter->src_plen_ge += 96;
     }
     *filter_return = filter;
     return c;
 
  error:
     free(token);
-    free(filter);
+    free_filter(filter);
     return -2;
 }
 
@@ -619,6 +655,8 @@ parse_anonymous_ifconf(int c, gnc_t gnc, void *closure,
     return c;
 
  error:
+    if(if_conf->ifname)
+        free(if_conf->ifname);
     free(if_conf);
     return -2;
 }
@@ -711,6 +749,7 @@ add_ifconf(struct interface_conf *if_conf, struct interface_conf **if_confs)
         while(next) {
             if(strcmp(next->ifname, if_conf->ifname) == 0) {
                 merge_ifconf(next, if_conf, next);
+                free(if_conf->ifname);
                 free(if_conf);
                 if_conf = next;
                 goto done;
@@ -732,6 +771,7 @@ flush_ifconf(struct interface_conf *if_conf)
 {
     if(if_conf == interface_confs) {
         interface_confs = if_conf->next;
+        free(if_conf->ifname);
         free(if_conf);
         return;
     } else {
@@ -739,6 +779,7 @@ flush_ifconf(struct interface_conf *if_conf)
         while(prev) {
             if(prev->next == if_conf) {
                 prev->next = if_conf->next;
+                free(if_conf->ifname);
                 free(if_conf);
                 return;
             }
@@ -755,13 +796,14 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
        because they require no special setup or because there is special
        case code for them. */
     if(config_finalised) {
-        if(strcmp(token, "keep-unfeasible") != 0 &&
-           strcmp(token, "link-detect") != 0 &&
+        if(strcmp(token, "link-detect") != 0 &&
            strcmp(token, "log-file") != 0 &&
            strcmp(token, "diversity") != 0 &&
            strcmp(token, "diversity-factor") != 0 &&
-           strcmp(token, "smoothing-half-life") != 0)
-            goto error;
+           strcmp(token, "smoothing-half-life") != 0 &&
+           strcmp(token, "fee") != 0 &&
+           strcmp(token, "metric-factor") != 0)
+        goto error;
     }
 
     if(strcmp(token, "protocol-port") == 0 ||
@@ -798,8 +840,7 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
             add_import_table(v);
         else
             abort();
-    } else if(strcmp(token, "keep-unfeasible") == 0 ||
-              strcmp(token, "link-detect") == 0 ||
+    } else if(strcmp(token, "link-detect") == 0 ||
               strcmp(token, "random-id") == 0 ||
               strcmp(token, "daemonise") == 0 ||
               strcmp(token, "skip-kernel-setup") == 0 ||
@@ -810,9 +851,7 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
         if(c < -1)
             goto error;
         b = (b == CONFIG_YES);
-        if(strcmp(token, "keep-unfeasible") == 0)
-            keep_unfeasible = b;
-        else if(strcmp(token, "link-detect") == 0)
+        if(strcmp(token, "link-detect") == 0)
             link_detect = b;
         else if(strcmp(token, "random-id") == 0)
             random_id = b;
@@ -889,6 +928,20 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
         if(c < -1 || f < 0 || f > 256)
             goto error;
         diversity_factor = f;
+    } else if(strcmp(token, "fee") == 0) {
+        uint32_t f = 0;
+        c = getuint32_t(c, &f, gnc, closure);
+        if(c < -1)
+            goto error;
+        fee = f;
+        check_xroutes(1);
+
+    } else if (strcmp(token, "metric-factor") == 0) {
+        uint32_t f = 0;
+        c = getuint32_t(c, &f, gnc, closure);
+        if(c < -1 || f > UINT32_MAX)
+            goto error;
+        metric_factor = f;
     } else if(strcmp(token, "smoothing-half-life") == 0) {
         int h;
         c = getint(c, &h, gnc, closure);
@@ -1297,7 +1350,7 @@ redistribute_filter(const unsigned char *prefix, unsigned short plen,
     res = do_filter(redistribute_filters, NULL, prefix, plen,
                     src_prefix, src_plen, NULL, ifindex, proto, result);
     if(res < 0)
-        res = INFINITY;
+        res = BABEL_INFINITY;
     return res;
 }
 
@@ -1310,7 +1363,7 @@ install_filter(const unsigned char *prefix, unsigned short plen,
     res = do_filter(install_filters, NULL, prefix, plen,
                     src_prefix, src_plen, NULL, 0, 0, result);
     if(res < 0)
-        res = INFINITY;
+        res = BABEL_INFINITY;
     return res;
 }
 

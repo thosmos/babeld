@@ -116,6 +116,7 @@ add_xroute(unsigned char prefix[16], unsigned char plen,
     memcpy(xroutes[numxroutes].src_prefix, src_prefix, 16);
     xroutes[numxroutes].src_plen = src_plen;
     xroutes[numxroutes].metric = metric;
+    xroutes[numxroutes].price = 0; // We don't charge neighbors
     xroutes[numxroutes].ifindex = ifindex;
     xroutes[numxroutes].proto = proto;
     numxroutes++;
@@ -249,7 +250,7 @@ check_xroutes(int send_updates)
 {
     int i, j, metric, export, change = 0, rc;
     struct kernel_route *routes;
-    struct filter_result filter_result = {0};
+    struct filter_result filter_result;
     int numroutes, numaddresses;
     static int maxroutes = 8;
     const int maxmaxroutes = 16 * 1024;
@@ -286,7 +287,6 @@ check_xroutes(int send_updates)
     /* Apply filter to kernel routes (e.g. change the source prefix). */
 
     for(i = numaddresses; i < numroutes; i++) {
-        filter_result.src_prefix = NULL;
         redistribute_filter(routes[i].prefix, routes[i].plen,
                             routes[i].src_prefix, routes[i].src_plen,
                             routes[i].ifindex, routes[i].proto,
@@ -307,7 +307,7 @@ check_xroutes(int send_updates)
                                      xroutes[i].src_prefix, xroutes[i].src_plen,
                                      xroutes[i].ifindex, xroutes[i].proto,
                                      NULL);
-        if(metric < INFINITY && metric == xroutes[i].metric) {
+        if(metric < BABEL_INFINITY && metric == xroutes[i].metric) {
             for(j = 0; j < numroutes; j++) {
                 if(xroutes[i].plen == routes[j].plen &&
                    memcmp(xroutes[i].prefix, routes[j].prefix, 16) == 0 &&
@@ -349,7 +349,7 @@ check_xroutes(int send_updates)
         metric = redistribute_filter(routes[i].prefix, routes[i].plen,
                                      routes[i].src_prefix, routes[i].src_plen,
                                      routes[i].ifindex, routes[i].proto, NULL);
-        if(metric < INFINITY) {
+        if(metric < BABEL_INFINITY) {
             rc = add_xroute(routes[i].prefix, routes[i].plen,
                             routes[i].src_prefix, routes[i].src_plen,
                             metric, routes[i].ifindex, routes[i].proto);
