@@ -528,6 +528,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             unsigned char channels[MAX_CHANNEL_HOPS];
             int channels_len = MAX_CHANNEL_HOPS;
             unsigned short interval, seqno, metric;
+            unsigned int price;
             int rc, parsed_len;
             if(len < 10) {
                 if(len < 2 || message[3] & 0x80)
@@ -537,10 +538,11 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             DO_NTOHS(interval, message + 6);
             DO_NTOHS(seqno, message + 8);
             DO_NTOHS(metric, message + 10);
+            DO_NTOHL(price, message + 12);
             if(message[5] == 0 ||
                (message[2] == 1 ? have_v4_prefix : have_v6_prefix))
                 rc = network_prefix(message[2], message[4], message[5],
-                                    message + 12,
+                                    message + 16,
                                     message[2] == 1 ? v4_prefix : v6_prefix,
                                     len - 10, prefix);
             else
@@ -557,7 +559,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                     have_v4_prefix = have_v6_prefix = 0;
                 goto fail;
             }
-            parsed_len = 10 + rc;
+            parsed_len = 16 + rc;
 
             plen = message[4] + (message[2] == 1 ? 96 : 0);
 
@@ -621,7 +623,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             }
 
             update_route(router_id, prefix, plen, src_prefix, src_plen, seqno,
-                         metric, interval, neigh, nh,
+                         metric, interval, price, neigh, nh,
                          channels, channels_len);
         } else if(type == MESSAGE_REQUEST) {
             unsigned char prefix[16], src_prefix[16], plen, src_plen;
@@ -691,6 +693,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             unsigned char channels[MAX_CHANNEL_HOPS];
             int channels_len = MAX_CHANNEL_HOPS;
             unsigned short interval, seqno, metric;
+            unsigned int price;
             const unsigned char *src_prefix_beginning = NULL;
             int rc, parsed_len = 0;
             if(len < 10)
@@ -702,8 +705,9 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             DO_NTOHS(interval, message + 6);
             DO_NTOHS(seqno, message + 8);
             DO_NTOHS(metric, message + 10);
+            DO_NTOHL(price, message + 12);
             if(omitted == 0 || (ae == 1 ? have_v4_prefix : have_v6_prefix))
-                rc = network_prefix(ae, plen, omitted, message + 12,
+                rc = network_prefix(ae, plen, omitted, message + 16,
                                     ae == 1 ? v4_prefix : v6_prefix,
                                     len - 10, prefix);
             else
@@ -711,7 +715,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             if(rc < 0)
                 goto fail;
 
-            parsed_len = 10 + rc;
+            parsed_len = 16 + rc;
             src_prefix_beginning = message + 2 + parsed_len;
 
             rc = network_prefix(ae, src_plen, 0, src_prefix_beginning, NULL,
@@ -761,7 +765,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             }
 
             update_route(router_id, prefix, plen, src_prefix, src_plen,
-                         seqno, metric, interval, neigh, nh,
+                         seqno, metric, interval, price, neigh, nh,
                          channels, channels_len);
         } else if(type == MESSAGE_REQUEST_SRC_SPECIFIC) {
             unsigned char prefix[16], plen, ae, src_prefix[16], src_plen;
@@ -1239,6 +1243,7 @@ really_send_update(struct interface *ifp,
                    const unsigned char *prefix, unsigned char plen,
                    const unsigned char *src_prefix, unsigned char src_plen,
                    unsigned short seqno, unsigned short metric,
+                   unsigned int price,
                    unsigned char *channels, int channels_len)
 {
     int add_metric, v4, real_plen, omit = 0;
@@ -1315,11 +1320,11 @@ really_send_update(struct interface *ifp,
     }
 
     if(!is_ss)
-        start_message(ifp, MESSAGE_UPDATE, 10 + (real_plen + 7) / 8 - omit +
+        start_message(ifp, MESSAGE_UPDATE, 14 + (real_plen + 7) / 8 - omit +
                       channels_size);
     else
         start_message(ifp, MESSAGE_UPDATE_SRC_SPECIFIC,
-                      10 + (real_plen + 7) / 8 - omit +
+                      14 + (real_plen + 7) / 8 - omit +
                       (real_src_plen + 7) / 8 + channels_size);
     accumulate_byte(ifp, v4 ? 1 : 2);
     if(is_ss)
@@ -1331,6 +1336,7 @@ really_send_update(struct interface *ifp,
     accumulate_short(ifp, (ifp->update_interval + 5) / 10);
     accumulate_short(ifp, seqno);
     accumulate_short(ifp, metric);
+    accumulate_int(ifp, price);
     accumulate_bytes(ifp, real_prefix + omit, (real_plen + 7) / 8 - omit);
     if(is_ss)
         accumulate_bytes(ifp, real_src_prefix, (real_src_plen + 7) / 8);
@@ -1341,11 +1347,11 @@ really_send_update(struct interface *ifp,
         accumulate_bytes(ifp, channels, channels_len);
     }
     if(!is_ss)
-        end_message(ifp, MESSAGE_UPDATE, 10 + (real_plen + 7) / 8 - omit +
+        end_message(ifp, MESSAGE_UPDATE, 14 + (real_plen + 7) / 8 - omit +
                     channels_size);
     else
         end_message(ifp, MESSAGE_UPDATE_SRC_SPECIFIC,
-                    10 + (real_plen + 7) / 8 - omit +
+                    14 + (real_plen + 7) / 8 - omit +
                     (real_src_plen + 7) / 8 + channels_size);
 
     if(flags & 0x80) {
@@ -1464,7 +1470,7 @@ flushupdates(struct interface *ifp)
                 really_send_update(ifp, myid,
                                    xroute->prefix, xroute->plen,
                                    xroute->src_prefix, xroute->src_plen,
-                                   myseqno, xroute->metric,
+                                   myseqno, xroute->metric, xroute->price,
                                    NULL, 0);
                 last_prefix = xroute->prefix;
                 last_plen = xroute->plen;
@@ -1513,7 +1519,7 @@ flushupdates(struct interface *ifp)
                 really_send_update(ifp, route->src->id,
                                    route->src->prefix, route->src->plen,
                                    route->src->src_prefix, route->src->src_plen,
-                                   seqno, metric,
+                                   seqno, metric, route->price,
                                    channels, chlen);
                 update_source(route->src, seqno, metric);
                 last_prefix = route->src->prefix;
@@ -1525,7 +1531,7 @@ flushupdates(struct interface *ifp)
                after an xroute has been retracted, so send a retraction. */
                 really_send_update(ifp, myid, b[i].prefix, b[i].plen,
                                    b[i].src_prefix, b[i].src_plen,
-                                   myseqno, INFINITY, NULL, -1);
+                                   myseqno, INFINITY, INFINITY ,NULL, -1);
             }
         }
         schedule_flush_now(ifp);
