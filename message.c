@@ -642,6 +642,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             unsigned char channels[MAX_CHANNEL_HOPS];
             int channels_len = MAX_CHANNEL_HOPS;
             unsigned short interval, seqno, metric;
+            unsigned int price;
             int rc, parsed_len, is_ss;
             if(len < 10) {
                 if(len < 2 || message[3] & 0x80)
@@ -651,10 +652,11 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             DO_NTOHS(interval, message + 6);
             DO_NTOHS(seqno, message + 8);
             DO_NTOHS(metric, message + 10);
+            DO_NTOHL(price, message + 12);
             if(message[5] == 0 ||
                (message[2] == 1 ? have_v4_prefix : have_v6_prefix))
                 rc = network_prefix(message[2], message[4], message[5],
-                                    message + 12,
+                                    message + 16,
                                     message[2] == 1 ? v4_prefix : v6_prefix,
                                     len - 10, prefix);
             else
@@ -671,7 +673,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                     have_v4_prefix = have_v6_prefix = 0;
                 goto fail;
             }
-            parsed_len = 10 + rc;
+            parsed_len = 16 + rc;
 
             plen = message[4] + (message[2] == 1 ? 96 : 0);
 
@@ -749,7 +751,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             }
 
             update_route(router_id, prefix, plen, src_prefix, src_plen, seqno,
-                         metric, interval, neigh, nh,
+                         metric, interval, price, neigh, nh,
                          channels, channels_len);
         } else if(type == MESSAGE_REQUEST) {
             unsigned char prefix[16], src_prefix[16], plen, src_plen;
@@ -1117,6 +1119,7 @@ really_buffer_update(struct buffered *buf, struct interface *ifp,
                      const unsigned char *prefix, unsigned char plen,
                      const unsigned char *src_prefix, unsigned char src_plen,
                      unsigned short seqno, unsigned short metric,
+                     unsigned int price,
                      unsigned char *channels, int channels_len)
 {
     int add_metric, v4, real_plen, real_src_plen;
@@ -1139,7 +1142,7 @@ really_buffer_update(struct buffered *buf, struct interface *ifp,
     metric = MIN(metric + add_metric, INFINITY);
 
     /* Worst case */
-    ensure_space(buf, ifp, 20 + 12 + 28 + 18);
+    ensure_space(buf, ifp, 20 + 12 + 28 + 18 + 4);
 
     v4 = plen >= 96 && v4mapped(prefix);
 
@@ -1191,7 +1194,7 @@ really_buffer_update(struct buffered *buf, struct interface *ifp,
 
     channels_size = diversity_kind == DIVERSITY_CHANNEL && channels_len >= 0 ?
         channels_len + 2 : 0;
-    len = 10 + (real_plen + 7) / 8 - omit + channels_size;
+    len = 14 + (real_plen + 7) / 8 - omit + channels_size;
     spb = (real_src_plen + 7) / 8;
     if(is_ss)
         len += 3 + spb;
@@ -1204,6 +1207,7 @@ really_buffer_update(struct buffered *buf, struct interface *ifp,
     accumulate_short(buf, (ifp->update_interval + 5) / 10);
     accumulate_short(buf, seqno);
     accumulate_short(buf, metric);
+    accumulate_int(buf, price);
     accumulate_bytes(buf, real_prefix + omit, (real_plen + 7) / 8 - omit);
     if(is_ss) {
         accumulate_byte(buf, SUBTLV_SOURCE_PREFIX);
@@ -1229,6 +1233,7 @@ really_send_update(struct interface *ifp, const unsigned char *id,
                    const unsigned char *prefix, unsigned char plen,
                    const unsigned char *src_prefix, unsigned char src_plen,
                    unsigned short seqno, unsigned short metric,
+                   unsigned int price,
                    unsigned char *channels, int channels_len)
 {
     if(!if_up(ifp))
@@ -1240,13 +1245,13 @@ really_send_update(struct interface *ifp, const unsigned char *id,
             if(neigh->ifp == ifp) {
                 really_buffer_update(&neigh->buf, ifp, id,
                                      prefix, plen, src_prefix, src_plen,
-                                     seqno, metric, channels, channels_len);
+                                     seqno, metric, price, channels, channels_len);
             }
         }
     } else {
         really_buffer_update(&ifp->buf, ifp, id,
                              prefix, plen, src_prefix, src_plen,
-                             seqno, metric, channels, channels_len);
+                             seqno, metric, price, channels, channels_len);
     }
 }
 
@@ -1360,7 +1365,7 @@ flushupdates(struct interface *ifp)
                 really_send_update(ifp, myid,
                                    xroute->prefix, xroute->plen,
                                    xroute->src_prefix, xroute->src_plen,
-                                   myseqno, xroute->metric,
+                                   myseqno, xroute->metric, xroute->price,
                                    NULL, 0);
                 last_prefix = xroute->prefix;
                 last_plen = xroute->plen;
@@ -1411,6 +1416,7 @@ flushupdates(struct interface *ifp)
                                    route->src->src_prefix,
                                    route->src->src_plen,
                                    seqno, metric,
+                                   route->price,
                                    channels, chlen);
                 update_source(route->src, seqno, metric);
                 last_prefix = route->src->prefix;
@@ -1423,7 +1429,7 @@ flushupdates(struct interface *ifp)
                 really_send_update(ifp, myid,
                                    b[i].prefix, b[i].plen,
                                    b[i].src_prefix, b[i].src_plen,
-                                   myseqno, INFINITY, NULL, -1);
+                                   myseqno, INFINITY, INFINITY ,NULL, -1);
             }
         }
 
