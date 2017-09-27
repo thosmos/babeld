@@ -41,7 +41,8 @@ THE SOFTWARE.
 #include "message.h"
 #include "configuration.h"
 
-unsigned char packet_header[4] = {42, 3};
+//TODO set this back to 3 or maybe add protocol parsing to wireshark
+unsigned char packet_header[4] = {42, 2};
 
 int split_horizon = 1;
 
@@ -123,10 +124,12 @@ network_prefix(int ae, int plen, unsigned int omitted,
 static int
 parse_update_subtlv(struct interface *ifp, int metric,
                     const unsigned char *a, int alen,
-                    unsigned char *channels, int *channels_len_return)
+                    unsigned char *channels, int *channels_len_return,
+                    int* have_timestamp_return, unsigned int* timestamp)
 {
     int type, len, i = 0;
     int channels_len;
+    int have_timestamp = 0;
 
     /* This will be overwritten if there's a DIVERSITY_HOPS sub-TLV. */
     if(*channels_len_return < 1 || (ifp->flags & IF_FARAWAY)) {
@@ -142,6 +145,7 @@ parse_update_subtlv(struct interface *ifp, int metric,
         }
     }
 
+    printf("About to enter subtlv parsting loop if %d < %d\n", i, alen);
     while(i < alen) {
         type = a[i];
         if(type == SUBTLV_PAD1) {
@@ -164,6 +168,10 @@ parse_update_subtlv(struct interface *ifp, int metric,
         } else if(type == SUBTLV_DIVERSITY) {
             memcpy(channels, a + i + 2, MIN(len, *channels_len_return));
             channels_len = MIN(len, *channels_len_return);
+        } else if(type == SUBTLV_PATH_RTT) {
+            memcpy(timestamp, a + i + 2, 4);
+            have_timestamp = 1;
+            printf("Hey look at me I've got a path rtt subtlv with value %s\n", format_thousands(*timestamp));
         } else {
             debugf("Received unknown%s Update sub-TLV %d.\n",
                    (type & 0x80) != 0 ? " mandatory" : "", type);
@@ -174,6 +182,9 @@ parse_update_subtlv(struct interface *ifp, int metric,
         i += len + 2;
     }
     *channels_len_return = channels_len;
+    if(have_timestamp) {
+        *have_timestamp_return = have_timestamp;
+    }
     return 1;
 }
 
@@ -358,8 +369,8 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 ifp->name, format_address(from));
         return;
     }
-
-    if(packet[1] != 3) {
+    //TODO also set this back to 3
+    if(packet[1] != 2) {
         fprintf(stderr,
                 "Received packet with unknown version %d on %s from %s.\n",
                 packet[1], ifp->name, format_address(from));
@@ -528,7 +539,8 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             unsigned char channels[MAX_CHANNEL_HOPS];
             int channels_len = MAX_CHANNEL_HOPS;
             unsigned short interval, seqno, metric;
-            unsigned int price;
+            int have_rtt_return = 0;
+            unsigned int price, path_rtt;
             int rc, parsed_len;
             if(len < 10) {
                 if(len < 2 || message[3] & 0x80)
@@ -585,11 +597,12 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 fprintf(stderr, "Received prefix with no router id.\n");
                 goto fail;
             }
-            debugf("Received update%s%s for %s from %s on %s.\n",
+            debugf("Received update%s%s for %s from %s on %s. size %d\n",
                    (message[3] & 0x80) ? "/prefix" : "",
                    (message[3] & 0x40) ? "/id" : "",
                    format_prefix(prefix, plen),
-                   format_address(from), ifp->name);
+                   format_address(from), ifp->name,
+                   len);
 
             if(message[2] == 0) {
                 rc = parse_other_subtlv(message + 12, len - 10);
@@ -612,19 +625,21 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 nh = neigh->address;
             }
 
-            rc = parse_update_subtlv(ifp, metric, message + 2 + parsed_len,
-                                     len - parsed_len, channels, &channels_len);
-            if (rc < 0)
-                goto done;
-
             if(message[2] == 1) {
                 if(!ifp->ipv4)
                     goto done;
             }
 
+            parse_update_subtlv(ifp, metric, message + parsed_len,
+                                len - parsed_len, channels, &channels_len,
+                                &have_rtt_return, &path_rtt);
+            if(have_rtt_return && neigh->rtt) {
+                path_rtt += neigh->rtt;
+            }
+            //TODO update route needs to take timestamps into account
             update_route(router_id, prefix, plen, src_prefix, src_plen, seqno,
                          metric, interval, price, neigh, nh,
-                         channels, channels_len);
+                         channels, channels_len, path_rtt);
         } else if(type == MESSAGE_REQUEST) {
             unsigned char prefix[16], src_prefix[16], plen, src_plen;
             int rc;
@@ -693,7 +708,8 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             unsigned char channels[MAX_CHANNEL_HOPS];
             int channels_len = MAX_CHANNEL_HOPS;
             unsigned short interval, seqno, metric;
-            unsigned int price;
+            int have_rtt_return = 0;
+            unsigned int price, path_rtt;
             const unsigned char *src_prefix_beginning = NULL;
             int rc, parsed_len = 0;
             if(len < 10)
@@ -754,19 +770,24 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 nh = neigh->address;
             }
 
-            rc = parse_update_subtlv(ifp, metric, message + 2 + parsed_len,
-                                     len - parsed_len, channels, &channels_len);
-            if(rc < 0)
-                goto done;
-
             if(ae == 1) {
                 if(!ifp->ipv4)
                     goto done;
             }
 
-            update_route(router_id, prefix, plen, src_prefix, src_plen,
-                         seqno, metric, interval, price, neigh, nh,
-                         channels, channels_len);
+            //TODO had to remove a +2 in parsed length here, did I do somthing
+            // or am I actually screwing up packet format?
+            // Probably the latter
+            parse_update_subtlv(ifp, metric, message + parsed_len,
+                                len - parsed_len, channels, &channels_len,
+                                &have_rtt_return, &path_rtt);
+            if(have_rtt_return && neigh->rtt) {
+                path_rtt += neigh->rtt;
+            }
+            //TODO update route needs to take timestamps into account
+            update_route(router_id, prefix, plen, src_prefix, src_plen, seqno,
+                         metric, interval, price, neigh, nh,
+                         channels, channels_len, path_rtt);
         } else if(type == MESSAGE_REQUEST_SRC_SPECIFIC) {
             unsigned char prefix[16], plen, ae, src_prefix[16], src_plen;
             int rc, parsed = 5;
@@ -1244,7 +1265,8 @@ really_send_update(struct interface *ifp,
                    const unsigned char *src_prefix, unsigned char src_plen,
                    unsigned short seqno, unsigned short metric,
                    unsigned int price,
-                   unsigned char *channels, int channels_len)
+                   unsigned char *channels, int channels_len,
+                   int send_rtt, unsigned int rtt)
 {
     int add_metric, v4, real_plen, omit = 0;
     const unsigned char *real_prefix;
@@ -1252,12 +1274,14 @@ really_send_update(struct interface *ifp,
     int real_src_plen = 0;
     unsigned short flags = 0;
     int channels_size;
+    int rtt_size;
     int is_ss = !is_default(src_prefix, src_plen);
 
     if(diversity_kind != DIVERSITY_CHANNEL)
         channels_len = -1;
 
     channels_size = channels_len >= 0 ? channels_len + 2 : 0;
+    rtt_size = send_rtt ? 6 : 0;
 
     if(!if_up(ifp))
         return;
@@ -1269,7 +1293,7 @@ really_send_update(struct interface *ifp,
 
     metric = MIN(metric + add_metric, INFINITY);
     /* Worst case */
-    ensure_space(ifp, 20 + 12 + 28 + 18);
+    ensure_space(ifp, 20 + 12 + 28 + 18 + rtt_size);
 
     v4 = plen >= 96 && v4mapped(prefix);
 
@@ -1321,11 +1345,11 @@ really_send_update(struct interface *ifp,
 
     if(!is_ss)
         start_message(ifp, MESSAGE_UPDATE, 14 + (real_plen + 7) / 8 - omit +
-                      channels_size);
+                      channels_size + rtt_size);
     else
         start_message(ifp, MESSAGE_UPDATE_SRC_SPECIFIC,
                       14 + (real_plen + 7) / 8 - omit +
-                      (real_src_plen + 7) / 8 + channels_size);
+                      (real_src_plen + 7) / 8 + channels_size + rtt_size);
     accumulate_byte(ifp, v4 ? 1 : 2);
     if(is_ss)
         accumulate_byte(ifp, real_src_plen);
@@ -1342,17 +1366,25 @@ really_send_update(struct interface *ifp,
         accumulate_bytes(ifp, real_src_prefix, (real_src_plen + 7) / 8);
     /* Note that an empty channels TLV is different from no such TLV. */
     if(channels_len >= 0) {
-        accumulate_byte(ifp, 2);
+        accumulate_byte(ifp, SUBTLV_DIVERSITY);
         accumulate_byte(ifp, channels_len);
         accumulate_bytes(ifp, channels, channels_len);
     }
-    if(!is_ss)
+    if(send_rtt) {
+        printf("I just sent a full path rtt subtlv with val %s!\n", format_thousands(rtt));
+        accumulate_byte(ifp, SUBTLV_PATH_RTT);
+        accumulate_byte(ifp, 4);
+        accumulate_int(ifp, rtt);
+    }
+    if(!is_ss) {
         end_message(ifp, MESSAGE_UPDATE, 14 + (real_plen + 7) / 8 - omit +
-                    channels_size);
-    else
+                    channels_size + rtt_size);
+    }
+    else {
         end_message(ifp, MESSAGE_UPDATE_SRC_SPECIFIC,
                     14 + (real_plen + 7) / 8 - omit +
-                    (real_src_plen + 7) / 8 + channels_size);
+                    (real_src_plen + 7) / 8 + channels_size + rtt_size);
+    }
 
     if(flags & 0x80) {
         memcpy(ifp->buffered_prefix, prefix, 16);
@@ -1412,7 +1444,7 @@ flushupdates(struct interface *ifp)
     const unsigned char *last_src_prefix = NULL;
     unsigned char last_plen = 0xFF;
     unsigned char last_src_plen = 0xFF;
-    int i;
+    int i, send_rtt;
 
     if(ifp == NULL) {
         struct interface *ifp_aux;
@@ -1471,7 +1503,7 @@ flushupdates(struct interface *ifp)
                                    xroute->prefix, xroute->plen,
                                    xroute->src_prefix, xroute->src_plen,
                                    myseqno, xroute->metric, xroute->price,
-                                   NULL, 0);
+                                   NULL, 0, 1, 0);
                 last_prefix = xroute->prefix;
                 last_plen = xroute->plen;
                 last_src_prefix = xroute->src_prefix;
@@ -1516,11 +1548,12 @@ flushupdates(struct interface *ifp)
                     chlen = 1 + MIN(route->channels_len, MAX_CHANNEL_HOPS - 1);
                 }
 
+                send_rtt = route->full_path_rtt ? 1 : 0;
                 really_send_update(ifp, route->src->id,
                                    route->src->prefix, route->src->plen,
                                    route->src->src_prefix, route->src->src_plen,
                                    seqno, metric, route->price,
-                                   channels, chlen);
+                                   channels, chlen, send_rtt, route->full_path_rtt);
                 update_source(route->src, seqno, metric);
                 last_prefix = route->src->prefix;
                 last_plen = route->src->plen;
@@ -1531,7 +1564,7 @@ flushupdates(struct interface *ifp)
                after an xroute has been retracted, so send a retraction. */
                 really_send_update(ifp, myid, b[i].prefix, b[i].plen,
                                    b[i].src_prefix, b[i].src_plen,
-                                   myseqno, INFINITY, INFINITY ,NULL, -1);
+                                   myseqno, INFINITY, INFINITY ,NULL, -1, 0, 0);
             }
         }
         schedule_flush_now(ifp);
