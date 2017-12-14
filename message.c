@@ -162,9 +162,9 @@ parse_update_subtlv(struct interface *ifp, int metric, int ae,
             memcpy(channels, a + i + 2, MIN(len, *channels_len_return));
             channels_len = MIN(len, *channels_len_return);
         } else if(type == SUBTLV_PATH_RTT) {
-            memcpy(timestamp, a + i + 2, 4);
+            DO_NTOHL(*timestamp, a + i + 2);
             have_timestamp = 1;
-            printf("Hey look at me I've got a path rtt subtlv with value %s\n", format_thousands(*timestamp));
+            debugf("Hey look at me I've got a path rtt subtlv with value %s\n", format_thousands(*timestamp));
         } else if(type == SUBTLV_SOURCE_PREFIX) {
             int rc;
             if(len < 1)
@@ -736,7 +736,11 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 goto done;
             
             if(have_rtt_return && neigh->rtt) {
+                // We captured a full path rtt and have a neigh rtt to attach
                 path_rtt += neigh->rtt;
+            } else {
+                // No full path rtt for this source through this neigh
+                path_rtt = 0;
             }
 
 
@@ -769,7 +773,18 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                     goto done;
             }
 
-            
+            parse_update_subtlv(ifp, metric, message + parsed_len,
+                                len - parsed_len, channels, &channels_len,
+                                &have_rtt_return, &path_rtt);
+
+            if(have_rtt_return && neigh->rtt) {
+                // We captured a full path rtt and have a neigh rtt to attach
+                path_rtt += neigh->rtt;
+            } else {
+                // No full path rtt for this source through this neigh
+                path_rtt = 0;
+            }
+
             //TODO update route needs to take timestamps into account
             update_route(router_id, prefix, plen, src_prefix, src_plen, seqno,
                          metric, interval, price, neigh, nh,
