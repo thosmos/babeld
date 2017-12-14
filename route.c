@@ -1004,9 +1004,7 @@ update_route(const unsigned char *id,
         local_notify_route(route, LOCAL_ADD);
         consider_route(route);
     }
-    if(full_path_rtt > 0) {
-        route->full_path_rtt = full_path_rtt;
-    }
+    route->full_path_rtt = full_path_rtt;
     return route;
 }
 
