@@ -24,7 +24,7 @@ run_lint()
 run_integration_tests()
 {
         pushd tests
-                sudo bash ./multihop-basic.sh &
+                sudo bash ./multihop-smoketest.sh &
                 wait
         popd
 }
