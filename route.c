@@ -1071,9 +1071,9 @@ consider_route(struct babel_route *route)
         goto install;
 
     // rebase addition: is this relevant?
-    if(route_metric(installed) >= route_metric(route) &&
-       route_smoothed_metric(installed) > route_smoothed_metric(route))
-        goto install;
+    //if(route_metric(installed) >= route_metric(route) &&
+    //   route_smoothed_metric(installed) > route_smoothed_metric(route))
+    //    goto install;
         
     /* TODO check for edge cases (overflow) and add price multiplier */
     installed_sum_metric = installed->price + route_smoothed_metric(installed) * price_multiplier;
