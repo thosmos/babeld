@@ -1066,8 +1066,8 @@ consider_route(struct babel_route *route)
         goto install;
 
 
-    installed_sum_metric = installed->price + (route_smoothed_metric(installed) * price_multiplier);
-    route_sum_metric = route->price + (route_smoothed_metric(route) * price_multiplier);
+    installed_sum_metric = installed->price + (route_smoothed_metric(installed) * quality_multiplier);
+    route_sum_metric = route->price + (route_smoothed_metric(route) * quality_multiplier);
     if(route_sum_metric < installed_sum_metric)
         goto install;
 

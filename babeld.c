@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -99,11 +100,14 @@ static int accept_local_connections(void);
 static void init_signals(void);
 static void dump_tables(FILE *out);
 
-// The cost to retransmit using this node
+// The cost to forward through us
 unsigned int per_byte_cost = 0;
-// Multiplier to indicate how much the user values funds vs quality
-// higher value means quality is valued more
-unsigned short price_multiplier = 1;
+
+/**
+ * A multiplier to indicate how much the user values quality vs. price metrics;
+ * higher value means quality is valued more
+ */
+uint16_t quality_multiplier = 1;
 
 static int
 kernel_route_notify(struct kernel_route *route, void *closure)
@@ -288,11 +292,16 @@ main(int argc, char **argv)
             break;
         }
         case 'a': {
-            //Adjust price sensitivity
-            unsigned int a = parse_price(optarg);
-            if(a > 65535)
+            // Use a helper variable to see if optarg fits
+            unsigned long a = strtoul(optarg, NULL, 0);
+
+            // Display help if strtoul() fails or the value won't fit
+            if(a > UINT16_MAX || (a == UINT16_MAX && errno == ERANGE)) {
+                fprintf(stderr, "Failed to parse the quality multiplier: %s",
+                        optarg);
                 goto usage;
-            price_multiplier = a;
+            }
+            quality_multiplier = a;
             break;
         }
         case 't':
@@ -882,6 +891,8 @@ main(int argc, char **argv)
             "[-u] [-t table] [-T table] [-c file] [-C statement]\n"
             "               "
             "[-d level] [-D] [-L logfile] [-I pidfile]\n"
+            "               "
+            "[-a multiplier]\n"
             "               "
             "interface...\n",
             BABELD_VERSION);

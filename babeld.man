@@ -158,6 +158,11 @@ Specify a file to write our process id to, use no pidfile if set to the
 empty string.  The default is
 .BR /var/run/babeld.pid .
 .TP
+.BI \-a " multiplier"
+Specify a factor by which Babel should treat quality metrics as more important
+than the price one. The default is
+.BR 1
+.TP
 .IR interface ...
 The list of interfaces on which the protocol should operate.
 .SH CONFIGURATION FILE FORMAT
