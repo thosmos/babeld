@@ -108,7 +108,7 @@ extern int protocol_socket;
 extern int kernel_socket;
 extern int max_request_hopcount;
 
-extern unsigned int per_byte_cost;
+extern uint32_t per_byte_cost;
 extern uint16_t quality_multiplier;
 
 void schedule_neighbours_check(int msecs, int override);

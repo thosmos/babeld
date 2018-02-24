@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <errno.h>
 
 #ifdef __linux
 /* Defining it rather than including <linux/rtnetlink.h> because this
@@ -178,8 +179,9 @@ getuint(int c, unsigned int *int_r, gnc_t gnc, void *closure)
     c = getword(c, &t, gnc, closure);
     if(c < -1)
         return c;
+    errno = 0;
     i = strtoul(t, &end, 0);
-    if(*end != '\0') {
+    if(*end != '\0' || errno) {
         free(t);
         return -2;
     }
@@ -935,10 +937,17 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
     } else if(strcmp(token, "price") == 0) {
         unsigned int f = 0;
         c = getuint(c, &f, gnc, closure);
-        if(c < -1 || f > 4294967295)
+        if(c < -1)
             goto error;
         per_byte_cost = f;
         check_xroutes(1);
+
+    } else if (strcmp(token, "quality-multiplier") == 0) {
+        unsigned int f = 0;
+        c = getuint(c, &f, gnc, closure);
+        if(c < -1 || f > UINT16_MAX)
+            goto error;
+        quality_multiplier = f;
     } else if(strcmp(token, "smoothing-half-life") == 0) {
         int h;
         c = getint(c, &h, gnc, closure);
