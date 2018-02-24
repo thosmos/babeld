@@ -178,7 +178,7 @@ add_xroute(unsigned char prefix[16], unsigned char plen,
     memcpy(xroutes[n].src_prefix, src_prefix, 16);
     xroutes[n].src_plen = src_plen;
     xroutes[n].metric = metric;
-    xroutes[n].price = per_byte_cost;
+    xroutes[n].price = 0; // We don't charge neighbors
     xroutes[n].ifindex = ifindex;
     xroutes[n].proto = proto;
     local_notify_xroute(&xroutes[n], LOCAL_ADD);
@@ -387,11 +387,6 @@ check_xroutes(int send_updates)
     }
 
     qsort(routes, numroutes, sizeof(struct kernel_route), kernel_route_compare);
-    
-    /* Update the price for all xroutes */
-    for(i = 0; i < numxroutes; i++){
-            xroutes[i].price = per_byte_cost;
-        }
 
     /* Check for any routes that need to be flushed */
 

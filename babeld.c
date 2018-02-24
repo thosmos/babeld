@@ -101,7 +101,7 @@ static void init_signals(void);
 static void dump_tables(FILE *out);
 
 // The cost to forward through us
-unsigned int per_byte_cost = 0;
+uint32_t per_byte_cost = 0;
 
 /**
  * A multiplier to indicate how much the user values quality vs. price metrics;
@@ -207,9 +207,6 @@ main(int argc, char **argv)
             if(protocol_port <= 0 || protocol_port > 0xFFFF)
                 goto usage;
             break;
-        case 'P':
-            per_byte_cost = parse_price(optarg);
-            break;
         case 'h':
             default_wireless_hello_interval = parse_thousands(optarg);
             if(default_wireless_hello_interval <= 0 ||
@@ -294,16 +291,33 @@ main(int argc, char **argv)
             change_smoothing_half_life(l);
             break;
         }
-        case 'a': {
-            // Use a helper variable to see if optarg fits
-            unsigned long a = strtoul(optarg, NULL, 0);
+        case 'P': {
+            char *endptr = optarg;
+            unsigned long a = strtoul(optarg, &endptr, 0);
+            errno = 0;
 
             // Display help if strtoul() fails or the value won't fit
-            if(a > UINT16_MAX || (a == UINT16_MAX && errno == ERANGE)) {
-                fprintf(stderr, "Failed to parse the quality multiplier: %s",
+            if(a > UINT32_MAX || endptr == optarg || errno) {
+                fprintf(stderr, "Couldn't parse the price: %s\n",
                         optarg);
                 goto usage;
             }
+
+            per_byte_cost = a;
+            break;
+        }
+        case 'a': {
+            char *endptr = optarg;
+            unsigned long a = strtoul(optarg, &endptr, 0);
+            errno = 0;
+
+            // Display help if strtoul() fails or the value won't fit
+            if(a > UINT16_MAX || endptr == optarg || errno) {
+                fprintf(stderr, "Couldn't parse the quality multiplier: %s\n",
+                        optarg);
+                goto usage;
+            }
+
             quality_multiplier = a;
             break;
         }
@@ -906,7 +920,7 @@ main(int argc, char **argv)
             "               "
             "[-d level] [-D] [-L logfile] [-I pidfile]\n"
             "               "
-            "[-a multiplier]\n"
+            "[-P price] [-a multiplier]\n"
             "               "
             "interface...\n",
             BABELD_VERSION);
