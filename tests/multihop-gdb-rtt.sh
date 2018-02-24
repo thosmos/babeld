@@ -101,7 +101,7 @@ ip netns exec netlab-2 $BABELPATH -G $CONFIGPORT -I babeld-n2.pid -d 3 -L babeld
 ip netns exec netlab-3 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-3 sysctl -w net.ipv6.conf.all.forwarding=1
 ip netns exec netlab-3 ip link set up dev lo
-ip netns exec netlab-3 $BABELPATH -G $CONFIGPORT -I babeld-n3.pid -d 3 -L babeld-n3.log-P 1 -w veth-3-2 veth-3-4 -C 'default max-rtt-penalty 100' -C 'default enable-timestamps true' &
+ip netns exec netlab-3 $BABELPATH -G $CONFIGPORT -I babeld-n3.pid -d 3 -L babeld-n3.log -P 1 -w veth-3-2 veth-3-4 -C 'default max-rtt-penalty 100' -C 'default enable-timestamps true' &
 
 ip netns exec netlab-4 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-4 sysctl -w net.ipv6.conf.all.forwarding=1
