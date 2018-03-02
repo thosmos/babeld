@@ -158,14 +158,14 @@ Specify a file to write our process id to, use no pidfile if set to the
 empty string.  The default is
 .BR /var/run/babeld.pid .
 .TP
-.BI \-P " price"
-Specify a per-byte forwarding price (only enforced on multihop
+.BI \-F " fee"
+Specify a per-byte forwarding fee (only enforced on multihop
 routes).  The default is
 .BR 0 .
 .TP
 .BI \-a " multiplier"
 Specify a factor by which Babel should treat quality metrics as more important
-than the price.  The default is
+than the next-hop's price.  The default is
 .BR 1 .
 .TP
 .IR interface ...
@@ -462,14 +462,14 @@ and
 .BR 0
 otherwise.
 .TP
-.BI price " price"
-This specifies the per-byte price at which packets are forwarded through us.
+.BI fee " fee"
+This specifies the per-byte fee at which packets are forwarded through us.
 The default is
 .BR 0 .
 .TP
 .BI quality-multiplier " multiplier"
 This specifies the factor by which Babel should care more about quality than
-price.  The default is
+next-hop price.  The default is
 .BR 1 .
 .SS Filtering rules
 A filtering rule is defined by a single line with the following format:
