@@ -101,7 +101,7 @@ static void init_signals(void);
 static void dump_tables(FILE *out);
 
 // The cost to forward through us
-uint32_t per_byte_cost = 0;
+uint32_t fee = 0;
 
 /**
  * A multiplier to indicate how much the user values quality vs. price metrics;
@@ -182,7 +182,7 @@ main(int argc, char **argv)
 
     while(1) {
         opt = getopt(argc, argv,
-                     "m:p:P:h:H:i:k:A:sruS:d:g:G:lwz:M:a:t:T:c:C:DL:I:V");
+                     "m:p:F:h:H:i:k:A:srS:d:g:G:lwz:M:a:t:T:c:C:DL:I:V");
         if(opt < 0)
             break;
 
@@ -234,9 +234,6 @@ main(int argc, char **argv)
             break;
         case 'r':
             random_id = 1;
-            break;
-        case 'u':
-            keep_unfeasible = 1;
             break;
         case 'S':
             state_file = optarg;
@@ -291,7 +288,7 @@ main(int argc, char **argv)
             change_smoothing_half_life(l);
             break;
         }
-        case 'P': {
+        case 'F': {
             char *endptr = optarg;
             unsigned long a = strtoul(optarg, &endptr, 0);
             errno = 0;
@@ -303,7 +300,7 @@ main(int argc, char **argv)
                 goto usage;
             }
 
-            per_byte_cost = a;
+            fee = a;
             break;
         }
         case 'a': {
@@ -1126,7 +1123,7 @@ dump_route(FILE *out, struct babel_route *route)
         snprintf(channels + j, 100 - j, ")");
     }
 
-    fprintf(out, "%s%s%s metric %d (%d) price %d refmetric %d full-path-rtt %s "
+    fprintf(out, "%s%s%s metric %d (%d) price %u fee %d refmetric %d full-path-rtt %s "
             "id %s seqno %d%s age %d via %s neigh %s%s%s%s\n",
             format_prefix(route->src->prefix, route->src->plen),
             route->src->src_plen > 0 ? " from " : "",
@@ -1134,7 +1131,8 @@ dump_route(FILE *out, struct babel_route *route)
             format_prefix(route->src->src_prefix, route->src->src_plen) : "",
             route_metric(route),
             route_smoothed_metric(route),
-            route->price,
+            route->price - fee, // I *myself* get there for $X...
+            fee,                // ...and I *charge* others $Y
             route->refmetric,
             format_thousands(route->full_path_rtt),
             format_eui64(route->src->id),
@@ -1174,7 +1172,7 @@ dump_tables(FILE *out)
 
     FOR_ALL_NEIGHBOURS(neigh) {
         fprintf(out, "Neighbour %s dev %s reach %04x ureach %04x "
-                "rxcost %u txcost %d rtt %s rttcost %u chan %d%s.\n",
+                "rxcost %d txcost %d rtt %s rttcost %d chan %d%s.\n",
                 format_address(neigh->address),
                 neigh->ifp->name,
                 neigh->hello.reach,

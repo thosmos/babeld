@@ -67,15 +67,15 @@ EOF
 
 ip netns exec netlab-1 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-1 sysctl -w net.ipv6.conf.all.forwarding=1
-ip netns exec netlab-1 $BABELPATH -I babeld-n1.pid -d 1 -L babeld-n1.log -P 5 -w veth-1-2 &
+ip netns exec netlab-1 $BABELPATH -I babeld-n1.pid -d 1 -L babeld-n1.log -F 5 -w veth-1-2 &
 
 ip netns exec netlab-2 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-2 sysctl -w net.ipv6.conf.all.forwarding=1
-ip netns exec netlab-2 $BABELPATH -I babeld-n2.pid -d 1 -L babeld-n2.log -P 10 -w veth-2-1 -w veth-2-3 &
+ip netns exec netlab-2 $BABELPATH -I babeld-n2.pid -d 1 -L babeld-n2.log -F 10 -w veth-2-1 -w veth-2-3 &
 
 ip netns exec netlab-3 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-3 sysctl -w net.ipv6.conf.all.forwarding=1
-ip netns exec netlab-3 $BABELPATH -I babeld-n3.pid -d 1 -L babeld-n3.log -P 1 -w veth-3-2&
+ip netns exec netlab-3 $BABELPATH -I babeld-n3.pid -d 1 -L babeld-n3.log -F 1 -w veth-3-2&
 
 sleep 60
 fail_string "malformed" "babeld-n1.log"
