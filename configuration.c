@@ -923,12 +923,12 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
         if(c < -1 || f < 0 || f > 256)
             goto error;
         diversity_factor = f;
-    } else if(strcmp(token, "price") == 0) {
+    } else if(strcmp(token, "fee") == 0) {
         unsigned int f = 0;
         c = getuint(c, &f, gnc, closure);
         if(c < -1)
             goto error;
-        per_byte_cost = f;
+        fee = f;
         check_xroutes(1);
 
     } else if (strcmp(token, "quality-multiplier") == 0) {
