@@ -912,7 +912,7 @@ update_route(const unsigned char *id,
             }
         }
 
-        route->price = price + per_byte_cost;
+        route->price = price + fee;
 
         route->src = retain_source(src);
         if(refmetric < INFINITY)
@@ -972,7 +972,7 @@ update_route(const unsigned char *id,
         route->src = retain_source(src);
         route->refmetric = refmetric;
         route->cost = neighbour_cost(neigh);
-        route->price = price + per_byte_cost;
+        route->price = price + fee;
         route->add_metric = add_metric;
         route->seqno = seqno;
         route->neigh = neigh;
