@@ -85,7 +85,7 @@ cat << EOF
 netlab-1 (price \$5)                 netlab-3 (price \$1)
    \\                                    /
     \\                                  /
-     \`---- netlab-4 (price \$15) -----\`
+     \`---- netlab-4 (price \$7) ------\`
 
 EOF
 
@@ -107,4 +107,4 @@ ip netns exec netlab-3 $BABELPATH -G $CONFIGPORT -I babeld-n3.pid -d 1 -L babeld
 ip netns exec netlab-4 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-4 sysctl -w net.ipv6.conf.all.forwarding=1
 ip netns exec netlab-4 ip link set up dev lo
-ip netns exec netlab-4 $GDBPATH --args $BABELPATH -G $CONFIGPORT -I babeld-n4.pid -d 1 -L babeld-n4.log -F 15 -w veth-4-1 veth-4-3
+ip netns exec netlab-4 $GDBPATH --args $BABELPATH -G $CONFIGPORT -I babeld-n4.pid -d 1 -L babeld-n4.log -F 7 -w veth-4-1 veth-4-3
