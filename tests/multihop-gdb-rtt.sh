@@ -53,23 +53,23 @@ cleanup
   "edges": [
      {
       "nodes": ["1", "2"],
-      "->": "loss random 0%",
-      "<-": "loss random 0%"
+      "->": "",
+      "<-": ""
      },
      {
       "nodes": ["2", "3"],
-      "->": "loss random 0%",
-      "<-": "loss random 0%"
+      "->": "",
+      "<-": ""
      },
      {
       "nodes": ["3", "4"],
-      "->": "loss random 0%",
-      "<-": "loss random 0%"
+      "->": "",
+      "<-": ""
      },
      {
       "nodes": ["4", "1"],
-      "->": "loss random 0%",
-      "<-": "loss random 0%"
+      "->": "",
+      "<-": ""
      }
   ]
 }
