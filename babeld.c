@@ -917,7 +917,7 @@ main(int argc, char **argv)
             "               "
             "[-d level] [-D] [-L logfile] [-I pidfile]\n"
             "               "
-            "[-P price] [-a multiplier]\n"
+            "[-F fee] [-a multiplier]\n"
             "               "
             "interface...\n",
             BABELD_VERSION);
