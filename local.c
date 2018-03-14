@@ -153,14 +153,16 @@ local_notify_neighbour_1(struct local_socket *s,
 
     rc = snprintf(buf, 512,
                   "%s neighbour %lx address %s "
-                  "if %s reach %04x rxcost %d txcost %d%s cost %d\n",
+                  "if %s reach %04x ureach %04x "
+                  "rxcost %d txcost %d%s cost %d\n",
                   local_kind(kind),
                   /* Neighbours never move around in memory , so we can use the
                      address as a unique identifier. */
                   (unsigned long int)neigh,
                   format_address(neigh->address),
                   neigh->ifp->name,
-                  neigh->reach,
+                  neigh->hello.reach,
+                  neigh->uhello.reach,
                   neighbour_rxcost(neigh),
                   neighbour_txcost(neigh),
                   rttbuf,
@@ -237,14 +239,17 @@ local_notify_route_1(struct local_socket *s, struct babel_route *route, int kind
                                            route->src->src_plen);
 
     rc = snprintf(buf, 512,
-                  "%s route %lx prefix %s from %s installed %s "
-                  "id %s metric %d price %u refmetric %d rtt %s via %s if %s\n",
+                  "%s route %lx prefix %s from %s installed %s id %s metric %d "
+                  "price %u fee %u refmetric %d full-path-rtt %s "
+                  "via %s if %s\n",
                   local_kind(kind),
                   (unsigned long)route,
                   dst_prefix, src_prefix,
                   route->installed ? "yes" : "no",
                   format_eui64(route->src->id),
-                  route_metric(route), route->price,
+                  route_metric(route),
+                  route->price - fee, // I *myself* get there for $X...
+                  fee,                // ...and I *charge* others $Y
                   route->refmetric,
                   format_thousands(route->full_path_rtt),
                   format_address(route->neigh->address),
@@ -278,7 +283,7 @@ local_notify_price_1(struct local_socket *s)
 {
     char buf[64];
     int rc;
-    rc  = snprintf(buf, 64, "local price %d\n", per_byte_cost);
+    rc  = snprintf(buf, 64, "local fee %d\n", fee);
 
     if(rc < 0 || rc >= 64)
         goto fail;
