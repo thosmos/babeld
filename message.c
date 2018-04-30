@@ -1390,7 +1390,7 @@ really_send_update(struct interface *ifp,
         accumulate_bytes(ifp, channels, channels_len);
     }
     if(send_fp_rtt) {
-        printf("Sending a full path RTT of %s\n", format_thousands(rtt));
+        debugf("Sending a full path RTT of %s\n", format_thousands(rtt));
         accumulate_byte(ifp, SUBTLV_PATH_RTT);
         accumulate_byte(ifp, 4);
         accumulate_int(ifp, rtt);
