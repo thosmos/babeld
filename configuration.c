@@ -174,14 +174,14 @@ getint(int c, int *int_r, gnc_t gnc, void *closure)
 static unsigned int
 getuint(int c, unsigned int *int_r, gnc_t gnc, void *closure)
 {
-    char *t, *end;
+    char *t = NULL, *end = NULL;
     unsigned int i;
     c = getword(c, &t, gnc, closure);
     if(c < -1)
         return c;
     errno = 0;
     i = strtoul(t, &end, 0);
-    if(*end != '\0' || errno) {
+    if(!t || t[0] == '-' || *end != '\0' || errno) {
         free(t);
         return -2;
     }
@@ -801,7 +801,7 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
            strcmp(token, "diversity") != 0 &&
            strcmp(token, "diversity-factor") != 0 &&
            strcmp(token, "smoothing-half-life") != 0 &&
-           strcmp(token, "price") != 0)
+           strcmp(token, "fee") != 0)
         goto error;
     }
 
