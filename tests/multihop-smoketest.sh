@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -eux
 
+cd $(dirname $0)
+
 BABELPATH=${BABELPATH:=../babeld}
 CONFIGPORT=${CONFIGPORT:=6872}
 CONVERGENCE_DELAY_SEC=${CONVERGENCE_DELAY_SEC:=5}
