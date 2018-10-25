@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -eux
 
+cd $(dirname $0)
+
 # This script will download any two babel revisions, build them, set a netlab
 # mesh up and then check if all nodes can see each other. A is supposed to be a
 # newer revision while B is what we're trying to stay compatible with
