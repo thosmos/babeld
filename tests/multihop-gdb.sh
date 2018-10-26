@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -eux
 
+cd $(dirname $0)
+
 BABELPATH=${BABELPATH:=../babeld}
-CONFIGPORT=${CONFIGPORT:=6126}
+CONFIGPORT=${CONFIGPORT:=6872}
 GDBPATH=${GDBPATH:=gdb}
 LABPATH=${LABPATH:=./network-lab.sh}
 

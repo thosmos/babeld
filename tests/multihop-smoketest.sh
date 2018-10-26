@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -eux
 
+cd $(dirname $0)
+
 BABELPATH=${BABELPATH:=../babeld}
-LABPATH=${LABPATH:=./network-lab.sh}
+CONFIGPORT=${CONFIGPORT:=6872}
 CONVERGENCE_DELAY_SEC=${CONVERGENCE_DELAY_SEC:=5}
+LABPATH=${LABPATH:=./network-lab.sh}
 
 # This is a basic integration test for the Althea fork of Babeld, it focuses on
 # validating that instances actually come up and communicate
@@ -176,6 +179,11 @@ pass_reachable "netlab-4" "1.0.0.2"
 
 pass_string "1.0.0.3/32 from.*price 0 fee 7.*via veth-4-3.*nexthop 1.0.0.3" "babeld-n4.log"
 pass_reachable "netlab-4" "1.0.0.3"
+
+if [[ -v DEBUG ]]; then
+  echo "Debug mode is active, press Enter for cleanup and exit"
+  read -n 1
+fi
 
 cleanup
 

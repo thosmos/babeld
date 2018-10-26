@@ -172,21 +172,21 @@ getint(int c, int *int_r, gnc_t gnc, void *closure)
 }
 
 static unsigned int
-getuint(int c, unsigned int *int_r, gnc_t gnc, void *closure)
+getuint32_t(int c, uint32_t *retval, gnc_t gnc, void *closure)
 {
-    char *t, *end;
-    unsigned int i;
+    char *t = NULL, *end = NULL;
+    unsigned long i;
     c = getword(c, &t, gnc, closure);
     if(c < -1)
         return c;
     errno = 0;
     i = strtoul(t, &end, 0);
-    if(*end != '\0' || errno) {
+    if(!t || t[0] == '-' || *end != '\0' || errno || i > (unsigned long)UINT32_MAX) {
         free(t);
         return -2;
     }
     free(t);
-    *int_r = i;
+    *retval = i;
     return c;
 }
 
@@ -801,7 +801,7 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
            strcmp(token, "diversity") != 0 &&
            strcmp(token, "diversity-factor") != 0 &&
            strcmp(token, "smoothing-half-life") != 0 &&
-           strcmp(token, "price") != 0)
+           strcmp(token, "fee") != 0)
         goto error;
     }
 
@@ -928,16 +928,16 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
             goto error;
         diversity_factor = f;
     } else if(strcmp(token, "fee") == 0) {
-        unsigned int f = 0;
-        c = getuint(c, &f, gnc, closure);
+        uint32_t f = 0;
+        c = getuint32_t(c, &f, gnc, closure);
         if(c < -1)
             goto error;
         fee = f;
         check_xroutes(1);
 
     } else if (strcmp(token, "quality-multiplier") == 0) {
-        unsigned int f = 0;
-        c = getuint(c, &f, gnc, closure);
+        uint32_t f = 0;
+        c = getuint32_t(c, &f, gnc, closure);
         if(c < -1 || f > UINT16_MAX)
             goto error;
         quality_multiplier = f;
