@@ -100,10 +100,10 @@ record_resend(int kind, const unsigned char *prefix, unsigned char plen,
     if((kind == RESEND_REQUEST &&
         input_filter(NULL, prefix, plen, src_prefix, src_plen, NULL,
                      ifindex) >=
-        INFINITY) ||
+        BABEL_INFINITY) ||
        (kind == RESEND_UPDATE &&
         output_filter(NULL, prefix, plen, src_prefix, src_plen, ifindex) >=
-        INFINITY))
+        BABEL_INFINITY))
         return 0;
 
     if(delay >= 0xFFFF)

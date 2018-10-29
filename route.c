@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <errno.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <math.h>
 
 #include "babeld.h"
 #include "util.h"
@@ -434,7 +435,7 @@ route_stream_done(struct route_stream *stream)
 int
 metric_to_kernel(int metric)
 {
-        if(metric >= INFINITY) {
+        if(metric >= BABEL_INFINITY) {
                 return KERNEL_INFINITY;
         } else if(reflect_kernel_metric) {
                 int r = kernel_metric + metric;
@@ -547,7 +548,7 @@ change_route_metric(struct babel_route *route,
                     unsigned refmetric, unsigned cost, unsigned add)
 {
     int old, new;
-    int newmetric = MIN(refmetric + cost + add, INFINITY);
+    int newmetric = MIN(refmetric + cost + add, BABEL_INFINITY);
 
     old = metric_to_kernel(route_metric(route));
     new = metric_to_kernel(newmetric);
@@ -579,7 +580,7 @@ retract_route(struct babel_route *route)
 {
     /* We cannot simply remove the route from the kernel, as that might
        cause a routing loop -- see RFC 6126 Sections 2.8 and 3.5.5. */
-    change_route_metric(route, INFINITY, INFINITY, 0);
+    change_route_metric(route, BABEL_INFINITY, BABEL_INFINITY, 0);
 }
 
 int
@@ -650,7 +651,7 @@ update_feasible(struct source *src,
         /* Never mind what is probably stale data */
         return 1;
 
-    if(refmetric >= INFINITY)
+    if(refmetric >= BABEL_INFINITY)
         /* Retractions are always feasible */
         return 1;
 
@@ -686,7 +687,7 @@ route_smoothed_metric(struct babel_route *route)
     int metric = route_metric(route);
 
     if(smoothing_half_life <= 0 ||                 /* no smoothing */
-       metric >= INFINITY ||                       /* route retracted */
+       metric >= BABEL_INFINITY ||                       /* route retracted */
        route->smoothed_metric_time > now.tv_sec || /* clock stepped */
        route->smoothed_metric == metric) {         /* already converged */
         route->smoothed_metric = metric;
@@ -771,10 +772,10 @@ update_route_metric(struct babel_route *route)
     int old_smoothed_metric = route_smoothed_metric(route);
 
     if(route_expired(route)) {
-        if(route->refmetric < INFINITY) {
+        if(route->refmetric < BABEL_INFINITY) {
             route->seqno = seqno_plus(route->src->seqno, 1);
             retract_route(route);
-            if(oldmetric < INFINITY)
+            if(oldmetric < BABEL_INFINITY)
                 route_changed(route, route->src, oldmetric, route->price);
         }
     } else {
@@ -869,7 +870,7 @@ update_route(const unsigned char *id,
 
     add_metric = input_filter(id, prefix, plen, src_prefix, src_plen,
                               neigh->address, neigh->ifp->ifindex);
-    if(add_metric >= INFINITY)
+    if(add_metric >= BABEL_INFINITY)
         return NULL;
 
     route = find_route(prefix, plen, src_prefix, src_plen, neigh, nexthop);
@@ -884,7 +885,7 @@ update_route(const unsigned char *id,
         return NULL;
 
     feasible = update_feasible(src, seqno, refmetric);
-    metric = MIN((int)refmetric + neighbour_cost(neigh) + add_metric, INFINITY);
+    metric = MIN((int)refmetric + neighbour_cost(neigh) + add_metric, BABEL_INFINITY);
 
     if(route) {
         struct source *oldsrc;
@@ -915,7 +916,7 @@ update_route(const unsigned char *id,
         route->price = price + fee;
 
         route->src = retain_source(src);
-        if(refmetric < INFINITY)
+        if(refmetric < BABEL_INFINITY)
             route->time = now.tv_sec;
         route->seqno = seqno;
 
@@ -956,7 +957,7 @@ update_route(const unsigned char *id,
     } else {
         struct babel_route *new_route;
 
-        if(refmetric >= INFINITY)
+        if(refmetric >= BABEL_INFINITY)
             /* Somebody's retracting a route we never saw. */
             return NULL;
         if(!feasible) {
@@ -979,7 +980,7 @@ update_route(const unsigned char *id,
         memcpy(route->nexthop, nexthop, 16);
         route->time = now.tv_sec;
         route->hold_time = hold_time;
-        route->smoothed_metric = MAX(route_metric(route), INFINITY / 2);
+        route->smoothed_metric = MAX(route_metric(route), BABEL_INFINITY / 2);
         route->smoothed_metric_time = now.tv_sec;
         if(channels_len > 0) {
             route->channels = malloc(channels_len);
@@ -1022,7 +1023,7 @@ send_unfeasible_request(struct neighbour *neigh, int force,
     if(force || !route || route_metric(route) >= metric + 512) {
         send_unicast_multihop_request(neigh, src->prefix, src->plen,
                                       src->src_prefix, src->src_plen,
-                                      src->metric >= INFINITY ?
+                                      src->metric >= BABEL_INFINITY ?
                                       src->seqno :
                                       seqno_plus(src->seqno, 1),
                                       src->id, 127);
@@ -1039,7 +1040,7 @@ consider_route(struct babel_route *route)
 {
     struct babel_route *installed;
     struct xroute *xroute;
-    unsigned long route_sum_metric, installed_sum_metric;
+    double route_sum_metric, installed_sum_metric;
 
     if(route->installed)
         return;
@@ -1059,15 +1060,25 @@ consider_route(struct babel_route *route)
     if(installed == NULL)
         goto install;
 
-    if(route_metric(route) >= INFINITY)
+    if(route_metric(route) >= BABEL_INFINITY)
         return;
 
-    if(route_metric(installed) >= INFINITY)
+    if(route_metric(installed) >= BABEL_INFINITY)
         goto install;
 
 
-    installed_sum_metric = installed->price + route_smoothed_metric(installed) * quality_multiplier;
-    route_sum_metric = route->price + route_smoothed_metric(route) * quality_multiplier;
+    /**
+     * Quick overview of Althea price/quality decision-making:
+     *
+     * Formula:
+     * metric(price, interference, coefficient) = log2(price) + log2(interference) * coefficient
+     *
+     * The gist of the formula is that at coefficient equal to 1 we'll only
+     * install an x times pricier route if it offers *more than x* times lower
+     * interference. i.e. 
+     */
+    installed_sum_metric = log2((double)installed->price) + log2((double)route_smoothed_metric(installed)) * ((double)metric_factor / 1000.0);
+    route_sum_metric = log2((double)route->price) + log2((double)route_smoothed_metric(route)) * ((double)metric_factor / 1000.0);
     if(route_sum_metric < installed_sum_metric)
         goto install;
 
@@ -1092,10 +1103,10 @@ retract_neighbour_routes(struct neighbour *neigh)
         struct babel_route *r = routes[i];
         while(r) {
             if(r->neigh == neigh) {
-                if(r->refmetric != INFINITY) {
+                if(r->refmetric != BABEL_INFINITY) {
                     unsigned short oldmetric = route_metric(r);
                     retract_route(r);
-                    if(oldmetric != INFINITY)
+                    if(oldmetric != BABEL_INFINITY)
                         route_changed(r, r->src, oldmetric, r->price);
                 }
             }
@@ -1119,7 +1130,7 @@ send_triggered_update(struct babel_route *route, struct source *oldsrc,
     diff =
         newmetric >= oldmetric ? newmetric - oldmetric : oldmetric - newmetric;
 
-    if(route->src != oldsrc || (oldmetric < INFINITY && newmetric >= INFINITY))
+    if(route->src != oldsrc || (oldmetric < BABEL_INFINITY && newmetric >= BABEL_INFINITY))
         /* Switching sources can cause transient routing loops.
            Retractions can cause blackholes. */
         urgent = 2;
@@ -1131,7 +1142,7 @@ send_triggered_update(struct babel_route *route, struct source *oldsrc,
                                 route->seqno, route->src->id))
         /* Make sure that requests are satisfied speedily */
         urgent = 1;
-    else if(oldmetric >= INFINITY && newmetric < INFINITY)
+    else if(oldmetric >= BABEL_INFINITY && newmetric < BABEL_INFINITY)
         /* New route */
         urgent = 0;
     else if(newmetric < oldmetric && diff < 1024)
@@ -1151,7 +1162,7 @@ send_triggered_update(struct babel_route *route, struct source *oldsrc,
         send_update(NULL, urgent, route->src->prefix, route->src->plen,
                     route->src->src_prefix, route->src->src_plen);
 
-    if(oldmetric < INFINITY) {
+    if(oldmetric < BABEL_INFINITY) {
         if(newmetric >= oldmetric + 288) {
             send_multicast_request(NULL, route->src->prefix, route->src->plen,
                                    route->src->src_prefix, route->src->src_plen);
@@ -1196,17 +1207,17 @@ route_lost(struct source *src, unsigned oldmetric)
                                 src->src_prefix, src->src_plen, 1, NULL);
     if(new_route) {
         consider_route(new_route);
-    } else if(oldmetric < INFINITY) {
+    } else if(oldmetric < BABEL_INFINITY) {
         /* Avoid creating a blackhole. */
         send_update_resend(NULL, src->prefix, src->plen,
                            src->src_prefix, src->src_plen);
         /* If the route was usable enough, try to get an alternate one.
            If it was not, we could be dealing with oscillations around
-           the value of INFINITY. */
-        if(oldmetric <= INFINITY / 2)
+           the value of BABEL_INFINITY. */
+        if(oldmetric <= BABEL_INFINITY / 2)
             send_request_resend(src->prefix, src->plen,
                                 src->src_prefix, src->src_plen,
-                                src->metric >= INFINITY ?
+                                src->metric >= BABEL_INFINITY ?
                                 src->seqno : seqno_plus(src->seqno, 1),
                                 src->id);
     }
@@ -1234,7 +1245,7 @@ expire_routes(void)
 
             update_route_metric(r);
 
-            if(r->installed && r->refmetric < INFINITY) {
+            if(r->installed && r->refmetric < BABEL_INFINITY) {
                 if(route_old(r))
                     /* Route about to expire, send a request. */
                     send_unicast_request(r->neigh,

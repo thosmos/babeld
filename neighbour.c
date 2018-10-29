@@ -101,7 +101,7 @@ find_neighbour(const unsigned char *address, struct interface *ifp)
 
     neigh->hello.seqno = neigh->uhello.seqno = -1;
     memcpy(neigh->address, address, 16);
-    neigh->txcost = INFINITY;
+    neigh->txcost = BABEL_INFINITY;
     neigh->ihu_time = now;
     neigh->hello.time = neigh->uhello.time = zero;
     neigh->hello_rtt_receive_time = zero;
@@ -202,7 +202,7 @@ reset_txcost(struct neighbour *neigh)
     if(delay >= 180000 || (neigh->hello.reach & 0xFFF0) == 0 ||
        (neigh->ihu_interval > 0 &&
         delay >= neigh->ihu_interval * 10 * 10)) {
-        neigh->txcost = INFINITY;
+        neigh->txcost = BABEL_INFINITY;
         neigh->ihu_time = now;
         return 1;
     }
@@ -283,7 +283,7 @@ neighbour_rxcost(struct neighbour *neigh)
 
     if(((reach & 0xFFF0) == 0 || delay >= 180000) &&
        ((ureach & 0xFFF0) == 0 || udelay >= 180000)) {
-        return INFINITY;
+        return BABEL_INFINITY;
     } else if((neigh->ifp->flags & IF_LQ)) {
         int sreach =
             ((reach & 0x8000) >> 2) +
@@ -294,12 +294,12 @@ neighbour_rxcost(struct neighbour *neigh)
         /* cost >= interface->cost */
         if(delay >= 40000)
             cost = (cost * (delay - 20000) + 10000) / 20000;
-        return MIN(cost, INFINITY);
+        return MIN(cost, BABEL_INFINITY);
     } else {
         if(two_three(reach) || two_three(ureach))
             return neigh->ifp->cost;
         else
-            return INFINITY;
+            return BABEL_INFINITY;
     }
 }
 
@@ -332,16 +332,16 @@ neighbour_cost(struct neighbour *neigh)
     unsigned a, b, cost;
 
     if(!if_up(neigh->ifp))
-        return INFINITY;
+        return BABEL_INFINITY;
 
     a = neighbour_txcost(neigh);
 
-    if(a >= INFINITY)
-        return INFINITY;
+    if(a >= BABEL_INFINITY)
+        return BABEL_INFINITY;
 
     b = neighbour_rxcost(neigh);
-    if(b >= INFINITY)
-        return INFINITY;
+    if(b >= BABEL_INFINITY)
+        return BABEL_INFINITY;
 
     if(!(neigh->ifp->flags & IF_LQ) || (a < 256 && b < 256)) {
         cost = a;
@@ -358,7 +358,7 @@ neighbour_cost(struct neighbour *neigh)
 
     cost += neighbour_rttcost(neigh);
 
-    return MIN(cost, INFINITY);
+    return MIN(cost, BABEL_INFINITY);
 }
 
 int

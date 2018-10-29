@@ -391,45 +391,20 @@ check_xroutes(int send_updates)
     /* Check for any routes that need to be flushed */
 
     i = 0;
-    j = 0;
-    while(i < numroutes || j < numxroutes) {
-        /* Ignore routes filtered out. */
-        if(i < numroutes && routes[i].metric >= INFINITY) {
-            i++;
-            continue;
-        }
-
-        if(i >= numroutes)
-            rc = +1;
-        else if(j >= numxroutes)
-            rc = -1;
-        else
-            rc = xroute_compare(routes[i].prefix, routes[i].plen,
-                                routes[i].src_prefix, routes[i].src_plen,
-                                &xroutes[j]);
-        if(rc < 0) {
-            /* Add route i. */
-            if(!martian_prefix(routes[i].prefix, routes[i].plen) &&
-               routes[i].metric < INFINITY) {
-                rc = add_xroute(routes[i].prefix, routes[i].plen,
-                                routes[i].src_prefix, routes[i].src_plen,
-                                routes[i].metric, routes[i].ifindex,
-                                routes[i].proto);
-                if(rc > 0) {
-                    struct babel_route *route;
-                    route = find_installed_route(routes[i].prefix,
-                                                 routes[i].plen,
-                                                 routes[i].src_prefix,
-                                                 routes[i].src_plen);
-                    if(route) {
-                        if(allow_duplicates < 0 ||
-                           routes[i].metric < allow_duplicates)
-                            uninstall_route(route);
-                    }
-                    if(send_updates)
-                        send_update(NULL, 0, routes[i].prefix, routes[i].plen,
-                                    routes[i].src_prefix, routes[i].src_plen);
-                    j++;
+    while(i < numxroutes) {
+        export = 0;
+        metric = redistribute_filter(xroutes[i].prefix, xroutes[i].plen,
+                                     xroutes[i].src_prefix, xroutes[i].src_plen,
+                                     xroutes[i].ifindex, xroutes[i].proto,
+                                     NULL);
+        if(metric < BABEL_INFINITY && metric == xroutes[i].metric) {
+            for(j = 0; j < numroutes; j++) {
+                if(xroutes[i].plen == routes[j].plen &&
+                   memcmp(xroutes[i].prefix, routes[j].prefix, 16) == 0 &&
+                   xroutes[i].ifindex == routes[j].ifindex &&
+                   xroutes[i].proto == routes[j].proto) {
+                    export = 1;
+                    break;
                 }
             }
             i++;

@@ -438,7 +438,7 @@ kchange_route_metric(const struct babel_route *route,
                      unsigned refmetric, unsigned cost, unsigned add)
 {
     int old_metric = metric_to_kernel(route_metric(route));
-    int new_metric = metric_to_kernel(MIN(refmetric + cost + add, INFINITY));
+    int new_metric = metric_to_kernel(MIN(refmetric + cost + add, BABEL_INFINITY));
     int rc;
     struct babel_route *rt1 = NULL;
     struct route_stream *stream = NULL;

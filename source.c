@@ -151,7 +151,7 @@ find_source(const unsigned char *id,
     memcpy(src->src_prefix, src_prefix, 16);
     src->src_plen = src_plen;
     src->seqno = seqno;
-    src->metric = INFINITY;
+    src->metric = BABEL_INFINITY;
     src->time = now.tv_sec;
 
     if(source_slots >= max_source_slots)
@@ -188,7 +188,7 @@ void
 update_source(struct source *src,
               unsigned short seqno, unsigned short metric)
 {
-    if(metric >= INFINITY)
+    if(metric >= BABEL_INFINITY)
         return;
 
     /* If a source is expired, pretend that it doesn't exist and update

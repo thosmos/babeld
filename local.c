@@ -279,11 +279,31 @@ local_notify_route(struct babel_route *route, int kind)
 }
 
 static void
-local_notify_price_1(struct local_socket *s)
+local_notify_fee_1(struct local_socket *s)
 {
     char buf[64];
     int rc;
     rc  = snprintf(buf, 64, "local fee %d\n", fee);
+
+    if(rc < 0 || rc >= 64)
+        goto fail;
+
+    rc = write_timeout(s->fd, buf, rc);
+    if(rc < 0)
+        goto fail;
+    return;
+
+ fail:
+    shutdown(s->fd, 1);
+    return;
+}
+
+static void
+local_notify_metric_factor_1(struct local_socket *s)
+{
+    char buf[64];
+    int rc;
+    rc  = snprintf(buf, 64, "metric factor %d\n", metric_factor);
 
     if(rc < 0 || rc >= 64)
         goto fail;
@@ -306,7 +326,8 @@ local_notify_all_1(struct local_socket *s)
     struct xroute_stream *xroutes;
     struct route_stream *routes;
 
-    local_notify_price_1(s);
+    local_notify_fee_1(s);
+    local_notify_metric_factor_1(s);
 
     FOR_ALL_INTERFACES(ifp) {
         local_notify_interface_1(s, ifp, LOCAL_ADD);

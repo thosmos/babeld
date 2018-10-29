@@ -1181,11 +1181,10 @@ really_buffer_update(struct buffered *buf, struct interface *ifp,
 
     add_metric = output_filter(id, prefix, plen, src_prefix,
                                src_plen, ifp->ifindex);
-    if(add_metric >= INFINITY)
+    if(add_metric >= BABEL_INFINITY)
         return;
 
-    metric = MIN(metric + add_metric, INFINITY);
-
+    metric = MIN(metric + add_metric, BABEL_INFINITY);
     /* Worst case */
     ensure_space(ifp, 20 + 12 + 28 + 18 + fp_rtt_size);
 
@@ -1434,7 +1433,7 @@ flushupdates(struct interface *ifp)
                     route_metric(route) :
                     route_metric_noninterfering(route);
 
-                if(metric < INFINITY)
+                if(metric < BABEL_INFINITY)
                     satisfy_request(route->src->prefix, route->src->plen,
                                     route->src->src_prefix,
                                     route->src->src_plen,
@@ -1478,10 +1477,9 @@ flushupdates(struct interface *ifp)
             } else {
             /* There's no route for this prefix.  This can happen shortly
                after an xroute has been retracted, so send a retraction. */
-                really_send_update(ifp, myid,
-                                   b[i].prefix, b[i].plen,
+                really_send_update(ifp, myid, b[i].prefix, b[i].plen,
                                    b[i].src_prefix, b[i].src_plen,
-                                   myseqno, INFINITY, INFINITY ,NULL, -1, 0, 0);
+                                   myseqno, BABEL_INFINITY, BABEL_INFINITY ,NULL, -1, 0, 0);
             }
         }
 
@@ -1571,7 +1569,7 @@ send_update(struct interface *ifp, int urgent,
             /* Since flushupdates only deals with non-wildcard interfaces, we
                need to do this now. */
             route = find_installed_route(prefix, plen, src_prefix, src_plen);
-            if(route && route_metric(route) < INFINITY)
+            if(route && route_metric(route) < BABEL_INFINITY)
                 satisfy_request(prefix, plen, src_prefix, src_plen,
                                 route->src->seqno, route->src->id, NULL);
         }
@@ -2099,7 +2097,7 @@ handle_request(struct neighbour *neigh, const unsigned char *prefix,
         return;
 
     /* Let's try to forward this request. */
-    if(route && route_metric(route) < INFINITY)
+    if(route && route_metric(route) < BABEL_INFINITY)
         successor = route->neigh;
 
     if(!successor || successor == neigh) {
@@ -2109,7 +2107,7 @@ handle_request(struct neighbour *neigh, const unsigned char *prefix,
 
         other_route = find_best_route(prefix, plen, src_prefix, src_plen,
                                       0, neigh);
-        if(other_route && route_metric(other_route) < INFINITY)
+        if(other_route && route_metric(other_route) < BABEL_INFINITY)
             successor = other_route->neigh;
     }
 
