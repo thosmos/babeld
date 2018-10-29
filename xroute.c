@@ -307,7 +307,7 @@ check_xroutes(int send_updates)
                                      xroutes[i].src_prefix, xroutes[i].src_plen,
                                      xroutes[i].ifindex, xroutes[i].proto,
                                      NULL);
-        if(metric < INFINITY && metric == xroutes[i].metric) {
+        if(metric < BABEL_INFINITY && metric == xroutes[i].metric) {
             for(j = 0; j < numroutes; j++) {
                 if(xroutes[i].plen == routes[j].plen &&
                    memcmp(xroutes[i].prefix, routes[j].prefix, 16) == 0 &&
@@ -349,7 +349,7 @@ check_xroutes(int send_updates)
         metric = redistribute_filter(routes[i].prefix, routes[i].plen,
                                      routes[i].src_prefix, routes[i].src_plen,
                                      routes[i].ifindex, routes[i].proto, NULL);
-        if(metric < INFINITY) {
+        if(metric < BABEL_INFINITY) {
             rc = add_xroute(routes[i].prefix, routes[i].plen,
                             routes[i].src_prefix, routes[i].src_plen,
                             metric, routes[i].ifindex, routes[i].proto);
