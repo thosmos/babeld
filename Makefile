@@ -7,7 +7,7 @@ DEFINES = $(PLATFORM_DEFINES)
 
 CFLAGS = -Os -Wall $(DEFINES) $(EXTRA_DEFINES)
 
-LDLIBS = -lrt
+LDLIBS = -lrt -lm
 
 SRCS = babeld.c net.c kernel.c util.c interface.c source.c neighbour.c \
        route.c xroute.c message.c resend.c configuration.c local.c \

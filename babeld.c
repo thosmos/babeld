@@ -105,9 +105,10 @@ uint32_t fee = 0;
 
 /**
  * A multiplier to indicate how much the user values quality vs. price metrics;
- * higher value means quality is valued more
+ * higher value means quality is valued more; Value is interpreted as 1000x of
+ * the target value, which makes the default below equal to 1.9
  */
-uint16_t quality_multiplier = 1;
+uint32_t metric_factor = 1900;
 
 static int
 kernel_route_notify(struct kernel_route *route, void *closure)
@@ -182,7 +183,7 @@ main(int argc, char **argv)
 
     while(1) {
         opt = getopt(argc, argv,
-                     "m:p:F:h:H:i:k:A:srS:d:g:G:lwz:M:a:t:T:c:C:DL:I:V");
+                     "m:p:F:h:H:i:k:A:srS:d:g:G:lwz:M:q:t:T:c:C:DL:I:V");
         if(opt < 0)
             break;
 
@@ -303,19 +304,19 @@ main(int argc, char **argv)
             fee = a;
             break;
         }
-        case 'a': {
+        case 'q': {
             char *endptr = optarg;
-            unsigned long a = strtoul(optarg, &endptr, 0);
+            unsigned long factor = strtoul(optarg, &endptr, 0);
             errno = 0;
 
             // Display help if strtoul() fails or the value won't fit
-            if(a > UINT16_MAX || endptr == optarg || errno) {
-                fprintf(stderr, "Couldn't parse the quality multiplier: %s\n",
+            if(factor > UINT32_MAX || endptr == optarg || errno) {
+                fprintf(stderr, "Couldn't parse the metric factor: %s\n",
                         optarg);
                 goto usage;
             }
 
-            quality_multiplier = a;
+            metric_factor = factor;
             break;
         }
         case 't':
@@ -906,7 +907,7 @@ main(int argc, char **argv)
             "               "
             "[-d level] [-D] [-L logfile] [-I pidfile]\n"
             "               "
-            "[-F fee] [-a multiplier]\n"
+            "[-F fee] [-q multiplier]\n"
             "               "
             "interface...\n",
             BABELD_VERSION);

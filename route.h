@@ -60,7 +60,7 @@ static inline int
 route_metric(const struct babel_route *route)
 {
     int m = (int)route->refmetric + route->cost + route->add_metric;
-    return MIN(m, INFINITY);
+    return MIN(m, BABEL_INFINITY);
 }
 
 static inline int
@@ -71,7 +71,7 @@ route_metric_noninterfering(const struct babel_route *route)
         (diversity_factor * route->cost + 128) / 256 +
         route->add_metric;
     m = MAX(m, route->refmetric + 1);
-    return MIN(m, INFINITY);
+    return MIN(m, BABEL_INFINITY);
 }
 
 struct babel_route *find_route(const unsigned char *prefix, unsigned char plen,
