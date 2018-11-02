@@ -109,22 +109,22 @@ EOF
 ip netns exec netlab-1 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-1 sysctl -w net.ipv6.conf.all.forwarding=1
 ip netns exec netlab-1 $BABELPATH -I babeld-n1.pid -d 1 -L babeld-n1.log -F 5 \
-  -w veth-1-4 -w veth-1-2 -h 1 -H 1 -C "default update-interval 1" -a 0 &
+  -w veth-1-4 -w veth-1-2 -h 1 -H 1 -C "default update-interval 1" -q 0 &
 
 ip netns exec netlab-2 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-2 sysctl -w net.ipv6.conf.all.forwarding=1
 ip netns exec netlab-2 $BABELPATH -I babeld-n2.pid -d 1 -L babeld-n2.log -F 10 \
-  -w veth-2-1 -w veth-2-3 -h 1 -H 1 -C "default update-interval 1" -a 0 &
+  -w veth-2-1 -w veth-2-3 -h 1 -H 1 -C "default update-interval 1" -q 0 &
 
 ip netns exec netlab-3 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-3 sysctl -w net.ipv6.conf.all.forwarding=1
 ip netns exec netlab-3 $BABELPATH -I babeld-n3.pid -d 1 -L babeld-n3.log -F 1 \
-  -w veth-3-2 -w veth-3-4 -h 1 -H 1 -C "default update-interval 1" -a 0 &
+  -w veth-3-2 -w veth-3-4 -h 1 -H 1 -C "default update-interval 1" -q 0 &
 
 ip netns exec netlab-4 sysctl -w net.ipv4.ip_forward=1
 ip netns exec netlab-4 sysctl -w net.ipv6.conf.all.forwarding=1
 ip netns exec netlab-4 $BABELPATH -I babeld-n4.pid -d 1 -L babeld-n4.log -F 7 \
-  -w veth-4-3 -w veth-4-1 -h 1 -H 1 -C "default update-interval 1" -a 0&
+  -w veth-4-3 -w veth-4-1 -h 1 -H 1 -C "default update-interval 1" -q 0&
 
 sleep $CONVERGENCE_DELAY_SEC
 
@@ -137,6 +137,11 @@ fail_string "unknown version" "babeld-n1.log"
 fail_string "unknown version" "babeld-n2.log"
 fail_string "unknown version" "babeld-n3.log"
 fail_string "unknown version" "babeld-n4.log"
+
+if [[ -v DEBUG ]]; then
+  echo "Debug mode is active, press Enter to finish the tests and exit"
+  read -n 1
+fi
 
 # ============================ PRICE TESTS =====================================
 

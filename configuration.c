@@ -465,12 +465,12 @@ parse_filter(int c, gnc_t gnc, void *closure, struct filter **filter_return)
         } else if(strcmp(token, "allow") == 0) {
             filter->action.add_metric = 0;
         } else if(strcmp(token, "deny") == 0) {
-            filter->action.add_metric = INFINITY;
+            filter->action.add_metric = BABEL_INFINITY;
         } else if(strcmp(token, "metric") == 0) {
             int metric;
             c = getint(c, &metric, gnc, closure);
             if(c < -1) goto error;
-            if(metric <= 0 || metric > INFINITY)
+            if(metric <= 0 || metric > BABEL_INFINITY)
                 goto error;
             filter->action.add_metric = metric;
         } else if(strcmp(token, "src-prefix") == 0) {
@@ -487,7 +487,7 @@ parse_filter(int c, gnc_t gnc, void *closure, struct filter **filter_return)
             int table;
             c = getint(c, &table, gnc, closure);
             if(c < -1) goto error;
-            if(table <= 0 || table > INFINITY)
+            if(table <= 0 || table > BABEL_INFINITY)
                 goto error;
             filter->action.table = table;
         } else {
@@ -801,7 +801,8 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
            strcmp(token, "diversity") != 0 &&
            strcmp(token, "diversity-factor") != 0 &&
            strcmp(token, "smoothing-half-life") != 0 &&
-           strcmp(token, "fee") != 0)
+           strcmp(token, "fee") != 0 &&
+           strcmp(token, "metric-factor") != 0)
         goto error;
     }
 
@@ -935,12 +936,12 @@ parse_option(int c, gnc_t gnc, void *closure, char *token)
         fee = f;
         check_xroutes(1);
 
-    } else if (strcmp(token, "quality-multiplier") == 0) {
+    } else if (strcmp(token, "metric-factor") == 0) {
         uint32_t f = 0;
         c = getuint32_t(c, &f, gnc, closure);
-        if(c < -1 || f > UINT16_MAX)
+        if(c < -1 || f > UINT32_MAX)
             goto error;
-        quality_multiplier = f;
+        metric_factor = f;
     } else if(strcmp(token, "smoothing-half-life") == 0) {
         int h;
         c = getint(c, &h, gnc, closure);
@@ -1349,7 +1350,7 @@ redistribute_filter(const unsigned char *prefix, unsigned short plen,
     res = do_filter(redistribute_filters, NULL, prefix, plen,
                     src_prefix, src_plen, NULL, ifindex, proto, result);
     if(res < 0)
-        res = INFINITY;
+        res = BABEL_INFINITY;
     return res;
 }
 
@@ -1362,7 +1363,7 @@ install_filter(const unsigned char *prefix, unsigned short plen,
     res = do_filter(install_filters, NULL, prefix, plen,
                     src_prefix, src_plen, NULL, 0, 0, result);
     if(res < 0)
-        res = INFINITY;
+        res = BABEL_INFINITY;
     return res;
 }
 
