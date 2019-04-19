@@ -283,7 +283,7 @@ local_notify_fee_1(struct local_socket *s)
 {
     char buf[64];
     int rc;
-    rc  = snprintf(buf, 64, "local fee %d\n", fee);
+    rc  = snprintf(buf, 64, "local fee %u\n", fee);
 
     if(rc < 0 || rc >= 64)
         goto fail;
@@ -303,7 +303,7 @@ local_notify_metric_factor_1(struct local_socket *s)
 {
     char buf[64];
     int rc;
-    rc  = snprintf(buf, 64, "metric factor %d\n", metric_factor);
+    rc  = snprintf(buf, 64, "metric factor %u\n", metric_factor);
 
     if(rc < 0 || rc >= 64)
         goto fail;
