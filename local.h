@@ -29,7 +29,7 @@ struct xroute;
 #define LOCAL_CHANGE 2
 
 #ifndef MAX_LOCAL_SOCKETS
-#define MAX_LOCAL_SOCKETS 4
+#define MAX_LOCAL_SOCKETS 128
 #endif
 
 #define LOCAL_BUFSIZE 1024
