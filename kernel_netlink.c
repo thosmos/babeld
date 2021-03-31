@@ -672,6 +672,7 @@ get_old_if(const char *ifname)
 int
 kernel_setup_interface(int setup, const char *ifname, int ifindex)
 {
+
     char buf[100];
     int i, rc;
 
