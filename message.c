@@ -158,7 +158,7 @@ parse_update_subtlv(struct interface *ifp, int metric,
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV on Update.\n");
             return -1;
         }
@@ -208,7 +208,7 @@ parse_hello_subtlv(const unsigned char *a, int alen,
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV on Hello.\n");
             return -1;
         }
@@ -262,7 +262,7 @@ parse_ihu_subtlv(const unsigned char *a, int alen,
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV on IHU.\n");
             return -1;
         }
@@ -315,7 +315,7 @@ parse_other_subtlv(const unsigned char *a, int alen)
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV.\n");
             return -1;
         }
@@ -407,7 +407,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             break;
         }
         len = message[1];
-        if(i + len > bodylen) {
+        if(i + len + 2 > bodylen) {
             fprintf(stderr, "Received truncated message.\n");
             break;
         }
@@ -627,7 +627,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 nh = neigh->address;
             }
 
-            rc = parse_update_subtlv(ifp, metric, message + parsed_len,
+            rc = parse_update_subtlv(ifp, metric, message + 2 + parsed_len,
                                      len - parsed_len, channels, &channels_len,
                                      &have_fp_rtt_return, &full_path_rtt);
             if (rc < 0)
@@ -781,10 +781,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 nh = neigh->address;
             }
 
-            //TODO had to remove a +2 in parsed length here, did I do somthing
-            // or am I actually screwing up packet format?
-            // Probably the latter
-            rc = parse_update_subtlv(ifp, metric, message + parsed_len,
+            rc = parse_update_subtlv(ifp, metric, message + 2 + parsed_len,
                                      len - parsed_len, channels, &channels_len,
                                      &have_fp_rtt_return, &full_path_rtt);
             if(rc < 0)
