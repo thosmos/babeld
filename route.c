@@ -1214,8 +1214,8 @@ route_lost(struct source *src, unsigned oldmetric)
                            src->src_prefix, src->src_plen);
         /* If the route was usable enough, try to get an alternate one.
            If it was not, we could be dealing with oscillations around
-           the value of BABEL_INFINITY. */
-        if(oldmetric <= BABEL_INFINITY / 2)
+           the value of INFINITY. */
+        if(oldmetric <= INFINITY / 2)
             send_request_resend(src->prefix, src->plen,
                                 src->src_prefix, src->src_plen,
                                 src->metric >= BABEL_INFINITY ?

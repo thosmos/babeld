@@ -159,7 +159,7 @@ parse_update_subtlv(struct interface *ifp, int metric,
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV on Update.\n");
             return -1;
         }
@@ -209,7 +209,7 @@ parse_hello_subtlv(const unsigned char *a, int alen,
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV on Hello.\n");
             return -1;
         }
@@ -263,7 +263,7 @@ parse_ihu_subtlv(const unsigned char *a, int alen,
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV on IHU.\n");
             return -1;
         }
@@ -316,7 +316,7 @@ parse_other_subtlv(const unsigned char *a, int alen)
             return -1;
         }
         len = a[i + 1];
-        if(i + len > alen) {
+        if(i + len + 2 > alen) {
             fprintf(stderr, "Received truncated sub-TLV.\n");
             return -1;
         }
@@ -408,7 +408,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
             break;
         }
         len = message[1];
-        if(i + len > bodylen) {
+        if(i + len + 2 > bodylen) {
             fprintf(stderr, "Received truncated message.\n");
             break;
         }
@@ -1080,9 +1080,9 @@ start_message(struct interface *ifp, int type, int len)
 static void
 end_message(struct interface *ifp, int type, int bytes)
 {
-    assert(ifp->buffered >= bytes + 2);
-    assert(ifp->sendbuf[ifp->buffered - bytes - 2] == type);
-    assert(ifp->sendbuf[ifp->buffered - bytes - 1] == bytes);
+    assert(ifp->buffered >= bytes + 2 &&
+           ifp->sendbuf[ifp->buffered - bytes - 2] == type &&
+           ifp->sendbuf[ifp->buffered - bytes - 1] == bytes);
     schedule_flush(ifp);
 }
 
