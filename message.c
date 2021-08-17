@@ -627,7 +627,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 nh = neigh->address;
             }
 
-            rc = parse_update_subtlv(ifp, metric, message + parsed_len,
+            rc = parse_update_subtlv(ifp, metric, message + 2 + parsed_len,
                                      len - parsed_len, channels, &channels_len,
                                      &have_fp_rtt_return, &full_path_rtt);
             if (rc < 0)
@@ -781,10 +781,7 @@ parse_packet(const unsigned char *from, struct interface *ifp,
                 nh = neigh->address;
             }
 
-            //TODO had to remove a +2 in parsed length here, did I do somthing
-            // or am I actually screwing up packet format?
-            // Probably the latter
-            rc = parse_update_subtlv(ifp, metric, message + parsed_len,
+            rc = parse_update_subtlv(ifp, metric, message + 2 + parsed_len,
                                      len - parsed_len, channels, &channels_len,
                                      &have_fp_rtt_return, &full_path_rtt);
             if(rc < 0)
